@@ -229,6 +229,11 @@ h1 em {
   box-shadow: 0 0 0 4px rgba(131, 189, 152, .2);
 }
 
+.is-loading .status-dot {
+  background: var(--sand);
+  box-shadow: 0 0 0 4px rgba(213, 185, 143, .2);
+}
+
 .player {
   position: relative;
   min-height: calc(100svh - 96px);
@@ -291,13 +296,13 @@ h1 em {
   touch-action: none;
   user-select: none;
   background: radial-gradient(circle, #17161e 0 5.1%, transparent 5.3%), repeating-radial-gradient(circle, #111116 0 2px, #292832 2.5px 3.5px, #0e0e13 4px 6px);
-  box-shadow: inset 0 0 95px #050509, 0 0 0 8px rgba(255, 255, 255, .025), 0 30px 60px rgba(0, 0, 0, .35);
+  box-shadow: inset 0 0 95px #050509, 0 0 0 8px rgba(255, 255, 255, .025);
   transition: box-shadow .3s;
 }
 
 .record:active {
   cursor: grabbing;
-  box-shadow: inset 0 0 95px #050509, 0 0 0 8px rgba(131, 189, 152, .08), 0 30px 70px rgba(0, 0, 0, .5);
+  box-shadow: inset 0 0 95px #050509, 0 0 0 8px rgba(255, 255, 255, .5);
 }
 
 .record::before {

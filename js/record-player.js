@@ -15,7 +15,7 @@ let lastMoveTime = 0;
 let velocity = 0;
 let momentumFrame;
 let playbackRateFrame;
-let targetPlaybackRate = 1;
+let targetPlaybackRate = 0;
 let isAudioPlaying = false;
 let logicalAudioTime = 0;
 let audioDirection = 'forward';
@@ -31,12 +31,15 @@ let audioSourceStartTime = 0;
 let audioSourceRate = 1;
 let audioTimeFrame;
 let audioUnlocked = false;
+let isAudioLoading = false;
 let lastAudioTimeLabel = '';
 let lastPlaybackRateLabel = '';
 
-const MIN_PLAYBACK_RATE = 0.5;
-const MAX_PLAYBACK_RATE = 2;
-const PLAYBACK_RATE_SMOOTHING = 0.2;
+const ATTENUATION_RATE = 1;
+const MIN_PLAYBACK_RATE = 0;
+const MAX_PLAYBACK_RATE = 4;
+const PLAYBACK_RATE_SMOOTHING = 0.1;
+const ROTATION_SPEED_SCALE = 4;
 const DEFAULT_AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
 let audioSourceUrl = DEFAULT_AUDIO_SOURCE_URL;
 
@@ -67,6 +70,11 @@ function updatePlaybackRateLabel() {
     if (nextLabel === lastPlaybackRateLabel) return;
     playbackRateValue.textContent = nextLabel;
     lastPlaybackRateLabel = nextLabel;
+}
+
+function updatePlayState() {
+    playState.textContent = isAudioLoading ? 'LOADING AUDIO' : isAudioPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
+    record.setAttribute('aria-busy', String(isAudioLoading));
 }
 
 function syncLogicalAudioTime() {
@@ -146,7 +154,9 @@ function loadAudioBuffer() {
 
 function setAudioSource(sourceUrl) {
     const nextSourceUrl = sourceUrl || DEFAULT_AUDIO_SOURCE_URL;
-    if (nextSourceUrl === audioSourceUrl && (audioBuffer || audioLoadPromise)) return;
+    if (nextSourceUrl === audioSourceUrl && (audioBuffer || audioLoadPromise)) {
+        return audioLoadPromise || Promise.resolve(audioBuffer);
+    }
     if (audioSource) stopAudioSource();
     audioSourceUrl = nextSourceUrl;
     audioLoadRequestId += 1;
@@ -155,7 +165,29 @@ function setAudioSource(sourceUrl) {
     reversedAudioBuffer = null;
     logicalAudioTime = 0;
     updateAudioTime();
-    loadAudioBuffer().catch(() => {});
+    isAudioLoading = true;
+    pageBody.classList.add('is-loading');
+    updatePlayState();
+    const nextLoadPromise = loadAudioBuffer();
+    return nextLoadPromise.then(
+        (buffer) => {
+            if (nextSourceUrl === audioSourceUrl) {
+                isAudioLoading = false;
+                pageBody.classList.remove('is-loading');
+                updatePlayState();
+            }
+            return buffer;
+        },
+        (error) => {
+            if (nextSourceUrl === audioSourceUrl) {
+                isAudioLoading = false;
+                pageBody.classList.remove('is-loading');
+                playState.textContent = 'AUDIO LOAD ERROR';
+                record.setAttribute('aria-busy', 'false');
+            }
+            throw error;
+        },
+    );
 }
 
 function unlockAudioContext() {
@@ -236,14 +268,29 @@ function angleFromCenter(event) {
     return (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI;
 }
 
+function getRotationSpeedPercent() {
+    return Math.min(Math.abs(velocity) * ROTATION_SPEED_SCALE, 100);
+}
+
+function getPlaybackRateForSpeed(speedPercent) {
+    if (speedPercent <= 40) {
+        return MIN_PLAYBACK_RATE + (speedPercent / 40) * (1 - MIN_PLAYBACK_RATE);
+    }
+    if (speedPercent <= 60) {
+        return 1;
+    }
+    return 1 + ((speedPercent - 60) / 40) * (MAX_PLAYBACK_RATE - 1);
+}
+
 function setRotation(nextRotation) {
     rotation = nextRotation;
     record.style.transform = `rotate(${rotation}deg)`;
     const normalized = ((Math.round(rotation) % 360) + 360) % 360;
     angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
     record.setAttribute('aria-valuenow', normalized);
-    meterFill.style.width = `${Math.min(Math.abs(velocity) * 7, 100)}%`;
-    targetPlaybackRate = velocity === 0 ? 1 : Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
+    const speedPercent = getRotationSpeedPercent();
+    meterFill.style.width = `${speedPercent}%`;
+    targetPlaybackRate = getPlaybackRateForSpeed(speedPercent);
     setAudioDirection(velocity < 0 ? 'reverse' : velocity > 0 ? 'forward' : audioDirection);
     if (!playbackRateFrame) playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
@@ -276,7 +323,7 @@ function updatePlaybackRate() {
 function updatePlaying(isPlaying) {
     isAudioPlaying = isPlaying;
     pageBody.classList.toggle('is-playing', isPlaying);
-    playState.textContent = isPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
+    updatePlayState();
     if (isPlaying) {
         dragHint.classList.add('is-hidden');
         if (getAudioDuration() > 0 && logicalAudioTime >= getAudioDuration()) logicalAudioTime = 0;
@@ -295,6 +342,8 @@ function stopMomentum() {
     cancelAnimationFrame(momentumFrame);
     velocity = 0;
     meterFill.style.width = '0%';
+    targetPlaybackRate = MIN_PLAYBACK_RATE;
+    if (!playbackRateFrame) playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
 
 function applyMomentum() {
@@ -304,7 +353,7 @@ function applyMomentum() {
         return;
     }
     setRotation(rotation + velocity);
-    velocity *= 0.965;
+    velocity *= ATTENUATION_RATE;
     momentumFrame = requestAnimationFrame(applyMomentum);
 }
 
@@ -374,8 +423,7 @@ updateAudioTime();
 updatePlaybackRateLabel();
 
 try {
-    initializeAudioContext();
-    loadAudioBuffer().catch(() => {});
+    setAudioSource(DEFAULT_AUDIO_SOURCE_URL).catch(() => {});
 } catch {
     // 音声未対応環境でも画面操作は継続できるようにする。
 }

@@ -173,3 +173,4 @@ changeButton.addEventListener('click', openPicker);
 closePickerButton.addEventListener('click', closePicker);
 
 renderPicker();
+selectRecord(0);
