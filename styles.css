@@ -169,7 +169,6 @@ a:focus-visible,
 .drag-hint,
 .deck-caption,
 .player-footer,
-.footer-note,
 .picker-footer {
   font-family: "DM Mono", monospace;
 }
@@ -366,67 +365,6 @@ h1 em {
   transform: translate(-50%, -50%);
 }
 
-.needle-arm {
-  display: none;
-  position: absolute;
-  z-index: 5;
-  top: 7%;
-  right: 7%;
-  width: 23%;
-  height: 64%;
-  transform: rotate(18deg);
-  transform-origin: 50% 0;
-  pointer-events: none;
-}
-
-.needle-pivot {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 66px;
-  height: 66px;
-  border: 11px solid #d9d4c8;
-  border-radius: 50%;
-  background: #33313a;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
-  transform: translateX(-50%);
-}
-
-.needle-stick {
-  position: absolute;
-  top: 52px;
-  left: calc(50% - 4px);
-  width: 8px;
-  height: 69%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, #77757b, #f4f0e8 45%, #77757b);
-  transform: rotate(-5deg);
-  transform-origin: top;
-}
-
-.needle-head {
-  position: absolute;
-  bottom: 4%;
-  left: 28%;
-  width: 40px;
-  height: 66px;
-  border-radius: 5px 5px 14px 14px;
-  background: #e4dfd5;
-  box-shadow: 0 5px 10px rgba(0, 0, 0, .32);
-  transform: rotate(-5deg);
-}
-
-.needle-head::after {
-  position: absolute;
-  bottom: 7px;
-  left: 50%;
-  width: 4px;
-  height: 17px;
-  background: var(--coral);
-  content: "";
-  transform: translate(-50%, 100%);
-}
-
 .drag-hint {
   position: absolute;
   z-index: 7;
@@ -465,27 +403,6 @@ h1 em {
 
 .deck-caption span {
   color: var(--coral);
-}
-
-.deck-details {
-  position: absolute;
-  top: 14%;
-  left: 7%;
-  color: var(--cream);
-}
-
-.deck-details span {
-  display: block;
-  font-size: clamp(1.8rem, 3vw, 3.8rem);
-  font-weight: 500;
-  letter-spacing: -.07em;
-}
-
-.deck-details small {
-  font-family: "DM Mono", monospace;
-  font-size: .52rem;
-  line-height: 1.5;
-  letter-spacing: .14em;
 }
 
 .player-footer {
@@ -527,22 +444,6 @@ h1 em {
   height: 100%;
   background: var(--ink);
   transition: width .15s;
-}
-
-.footer-note {
-  position: absolute;
-  bottom: 25px;
-  left: clamp(24px, 4vw, 64px);
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: .54rem;
-  letter-spacing: .12em;
-}
-
-.footer-note p {
-  margin: 0;
-  font-weight: 500;
 }
 
 .picker-panel {
@@ -783,35 +684,6 @@ h1 em {
     width: min(78vw, 480px);
   }
 
-  .needle-arm {
-    top: 5%;
-    right: 2%;
-    width: 28%;
-    height: 62%;
-  }
-
-  .needle-pivot {
-    width: 48px;
-    height: 48px;
-    border-width: 8px;
-  }
-
-  .needle-stick {
-    top: 39px;
-    height: 72%;
-    width: 6px;
-  }
-
-  .needle-head {
-    left: 25%;
-    width: 31px;
-    height: 50px;
-  }
-
-  .deck-details {
-    display: none;
-  }
-
   .drag-hint {
     left: 7%;
     bottom: 5%;
@@ -820,10 +692,6 @@ h1 em {
   .player-footer {
     width: 100%;
     padding: 14px 20px 72px;
-  }
-
-  .footer-note {
-    display: none;
   }
 
   .picker-panel {

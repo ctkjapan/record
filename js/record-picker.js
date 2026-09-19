@@ -4,12 +4,19 @@ const pickerPanel = document.querySelector('#pickerPanel');
 const pickerTrack = document.querySelector('#pickerTrack');
 const pickerPosition = document.querySelector('#pickerPosition');
 const pickerStatus = document.querySelector('#pickerStatus');
+const playerPanel = document.querySelector('.player');
+const albumNumber = document.querySelector('#albumNumber');
+const albumArtist = document.querySelector('#albumArtist');
+const albumTitle = document.querySelector('#albumTitle');
+const labelNumber = document.querySelector('.label strong');
+const sessionLabel = document.querySelector('.session-label');
+const pickerPageBody = document.body;
 
 const records = [
     { id: '001', title: 'P4D / Dance!', color: '#b4d34b', audioUrl: 'mp3/1-01%20Dance!.mp3' },
     { id: '002', title: 'P5 / Life Will Change', color: '#ed6a4e', audioUrl: 'mp3/04%20Life%20Will%20Change.mp3' },
     { id: '003', title: 'JSR / All', color: '#d8c46a', audioUrl: 'mp3/JSR.mp3' },
-    { id: '004', title: 'TIDE / BLUE MOTION', color: '#91b9b0' },
+    { id: '004', title: 'Mrs. GREEN APPLE / 青と夏', color: '#91b9b0', audioUrl: 'mp3/mga_2.mp3' },
 ];
 
 let focusedRecordIndex = 0;
@@ -20,6 +27,7 @@ let pickerDragStartScrollLeft = 0;
 let pickerDidDrag = false;
 let pickerPointerStartIndex = null;
 let pickerSelectedOnPointerUp = false;
+let pickerCards = [];
 
 function renderPicker() {
     pickerTrack.innerHTML = records
@@ -32,11 +40,12 @@ function renderPicker() {
   `,
         )
         .join('');
+    pickerCards = [...pickerTrack.querySelectorAll('.picker-card')];
 }
 
 function setFocusedRecord(index) {
     focusedRecordIndex = Math.max(0, Math.min(records.length - 1, index));
-    pickerTrack.querySelectorAll('.picker-card').forEach((card, cardIndex) => {
+    pickerCards.forEach((card, cardIndex) => {
         card.classList.toggle('is-focused', cardIndex === focusedRecordIndex);
     });
     pickerPosition.textContent = String(focusedRecordIndex + 1).padStart(2, '0');
@@ -48,13 +57,13 @@ function selectRecord(index) {
     const nextRecord = records[index];
     window.RecordPlayer.setAudioSource(nextRecord.audioUrl);
     const [artist, title] = nextRecord.title.split(' / ');
-    document.querySelector('.label strong').textContent = nextRecord.id;
+    labelNumber.textContent = nextRecord.id;
     document.documentElement.style.setProperty('--accent', nextRecord.color);
-    document.querySelector('.session-label').textContent = nextRecord.id;
-    document.querySelector('#albumNumber').textContent = String(index + 1).padStart(2, '0');
-    document.querySelector('#albumArtist').textContent = artist;
-    document.querySelector('#albumTitle').textContent = title;
-    pickerTrack.querySelectorAll('.picker-card').forEach((card, cardIndex) => {
+    sessionLabel.textContent = nextRecord.id;
+    albumNumber.textContent = String(index + 1).padStart(2, '0');
+    albumArtist.textContent = artist;
+    albumTitle.textContent = title;
+    pickerCards.forEach((card, cardIndex) => {
         card.classList.toggle('is-selected', cardIndex === selectedRecordIndex);
     });
     pickerStatus.textContent = `${nextRecord.title} を再生中`;
@@ -63,8 +72,8 @@ function selectRecord(index) {
 function openPicker() {
     window.RecordPlayer.stop();
     pickerPanel.hidden = false;
-    document.querySelector('.player').hidden = true;
-    document.body.classList.add('picker-open');
+    playerPanel.hidden = true;
+    pickerPageBody.classList.add('picker-open');
     changeButton.textContent = 'SELECTING';
     changeButton.setAttribute('aria-pressed', 'true');
     setFocusedRecord(selectedRecordIndex);
@@ -75,8 +84,8 @@ function openPicker() {
 
 function closePicker() {
     pickerPanel.hidden = true;
-    document.querySelector('.player').hidden = false;
-    document.body.classList.remove('picker-open');
+    playerPanel.hidden = false;
+    pickerPageBody.classList.remove('picker-open');
     changeButton.textContent = 'COLLECTION';
     changeButton.setAttribute('aria-pressed', 'false');
 }
@@ -88,7 +97,7 @@ pickerTrack.addEventListener(
         const trackCenter = trackBounds.left + trackBounds.width / 2;
         let closestIndex = 0;
         let closestDistance = Infinity;
-        pickerTrack.querySelectorAll('.picker-card').forEach((card, index) => {
+        pickerCards.forEach((card, index) => {
             const bounds = card.getBoundingClientRect();
             const distance = Math.abs(bounds.left + bounds.width / 2 - trackCenter);
             if (distance < closestDistance) {

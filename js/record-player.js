@@ -6,6 +6,7 @@ const audioTime = document.querySelector('#audioTime');
 const playbackRateValue = document.querySelector('#playbackRateValue');
 const angleValue = document.querySelector('#angleValue');
 const meterFill = document.querySelector('#meterFill');
+const pageBody = document.body;
 
 let rotation = 0;
 let previousAngle = null;
@@ -23,15 +24,18 @@ let audioBuffer;
 let reversedAudioBuffer;
 let audioLoadPromise;
 let audioLoadRequestId = 0;
+const audioBufferCache = new Map();
 let audioSource;
 let audioSourceStartedAt = 0;
 let audioSourceStartTime = 0;
 let audioSourceRate = 1;
 let audioTimeFrame;
 let audioUnlocked = false;
+let lastAudioTimeLabel = '';
+let lastPlaybackRateLabel = '';
 
-const MIN_PLAYBACK_RATE = 0.1;
-const MAX_PLAYBACK_RATE = 4;
+const MIN_PLAYBACK_RATE = 0.5;
+const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_SMOOTHING = 0.2;
 const DEFAULT_AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
 let audioSourceUrl = DEFAULT_AUDIO_SOURCE_URL;
@@ -52,11 +56,17 @@ function getAudioDuration() {
 }
 
 function updateAudioTime() {
-    audioTime.textContent = `${formatTime(logicalAudioTime)} / ${formatTime(getAudioDuration())}`;
+    const nextLabel = `${formatTime(logicalAudioTime)} / ${formatTime(getAudioDuration())}`;
+    if (nextLabel === lastAudioTimeLabel) return;
+    audioTime.textContent = nextLabel;
+    lastAudioTimeLabel = nextLabel;
 }
 
 function updatePlaybackRateLabel() {
-    playbackRateValue.textContent = `${audioSourceRate.toFixed(2)}x`;
+    const nextLabel = `${audioSourceRate.toFixed(2)}x`;
+    if (nextLabel === lastPlaybackRateLabel) return;
+    playbackRateValue.textContent = nextLabel;
+    lastPlaybackRateLabel = nextLabel;
 }
 
 function syncLogicalAudioTime() {
@@ -99,6 +109,13 @@ function loadAudioBuffer() {
     const context = initializeAudioContext();
     const sourceUrl = audioSourceUrl;
     const requestId = ++audioLoadRequestId;
+    const cachedBuffers = audioBufferCache.get(sourceUrl);
+    if (cachedBuffers) {
+        audioBuffer = cachedBuffers.forward;
+        reversedAudioBuffer = cachedBuffers.reverse;
+        updateAudioTime();
+        return Promise.resolve(audioBuffer);
+    }
     audioLoadPromise = fetch(sourceUrl)
         .then((response) => {
             if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
@@ -116,6 +133,7 @@ function loadAudioBuffer() {
                     reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
                 }
             }
+            audioBufferCache.set(sourceUrl, { forward: buffer, reverse: reversedAudioBuffer });
             updateAudioTime();
             return audioBuffer;
         });
@@ -128,7 +146,7 @@ function loadAudioBuffer() {
 
 function setAudioSource(sourceUrl) {
     const nextSourceUrl = sourceUrl || DEFAULT_AUDIO_SOURCE_URL;
-    if (nextSourceUrl === audioSourceUrl) return;
+    if (nextSourceUrl === audioSourceUrl && (audioBuffer || audioLoadPromise)) return;
     if (audioSource) stopAudioSource();
     audioSourceUrl = nextSourceUrl;
     audioLoadRequestId += 1;
@@ -257,7 +275,7 @@ function updatePlaybackRate() {
 
 function updatePlaying(isPlaying) {
     isAudioPlaying = isPlaying;
-    document.body.classList.toggle('is-playing', isPlaying);
+    pageBody.classList.toggle('is-playing', isPlaying);
     playState.textContent = isPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
     if (isPlaying) {
         dragHint.classList.add('is-hidden');
