@@ -1,7 +1,6 @@
 const record = document.querySelector('#record');
 const resetButton = document.querySelector('#resetButton');
 const dragHint = document.querySelector('#dragHint');
-const recordAudio = document.querySelector('#recordAudio');
 const playState = document.querySelector('#playState');
 const audioTime = document.querySelector('#audioTime');
 const playbackRateValue = document.querySelector('#playbackRateValue');
@@ -38,18 +37,21 @@ let targetPlaybackRate = 1;
 let isAudioPlaying = false;
 let logicalAudioTime = 0;
 let audioDirection = 'forward';
-let reverseAudioContext;
-let reverseAudioBuffer;
-let reverseAudioLoadPromise;
-let reverseSource;
-let reverseTimeFrame;
-let reverseSourceStartedAt = 0;
-let reverseSourceStartTime = 0;
-let reversePlaybackRate = 1;
+let audioContext;
+let audioBuffer;
+let reversedAudioBuffer;
+let audioLoadPromise;
+let audioSource;
+let audioSourceStartedAt = 0;
+let audioSourceStartTime = 0;
+let audioSourceRate = 1;
+let audioTimeFrame;
+let audioUnlocked = false;
 
 const MIN_PLAYBACK_RATE = 0.5;
-const MAX_PLAYBACK_RATE = 2.5;
+const MAX_PLAYBACK_RATE = 8;
 const PLAYBACK_RATE_SMOOTHING = 0.2;
+const AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
 
 function formatTime(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
@@ -63,8 +65,7 @@ function formatTime(seconds) {
 }
 
 function getAudioDuration() {
-    if (Number.isFinite(recordAudio.duration)) return recordAudio.duration;
-    return reverseAudioBuffer?.duration || 0;
+    return audioBuffer?.duration || 0;
 }
 
 function updateAudioTime() {
@@ -72,122 +73,148 @@ function updateAudioTime() {
 }
 
 function updatePlaybackRateLabel() {
-    playbackRateValue.textContent = `${recordAudio.playbackRate.toFixed(2)}x`;
+    playbackRateValue.textContent = `${audioSourceRate.toFixed(2)}x`;
 }
 
 function syncLogicalAudioTime() {
     const duration = getAudioDuration();
-    if (reverseSource && reverseAudioContext) {
-        const elapsed = Math.max(0, reverseAudioContext.currentTime - reverseSourceStartedAt);
-        logicalAudioTime = Math.min(duration, Math.max(0, reverseSourceStartTime - elapsed * reversePlaybackRate));
-    } else {
-        logicalAudioTime = Math.min(duration, Math.max(0, recordAudio.currentTime || 0));
+    if (audioSource && audioContext) {
+        const elapsed = Math.max(0, audioContext.currentTime - audioSourceStartedAt);
+        const directionFactor = audioDirection === 'reverse' ? -1 : 1;
+        logicalAudioTime = Math.min(duration, Math.max(0, audioSourceStartTime + elapsed * audioSourceRate * directionFactor));
     }
     updateAudioTime();
 }
 
-function updateReverseTime() {
-    if (!reverseSource) return;
+function updateAudioTimeLoop() {
+    if (!audioSource) return;
     syncLogicalAudioTime();
-    reverseTimeFrame = requestAnimationFrame(updateReverseTime);
+    audioTimeFrame = requestAnimationFrame(updateAudioTimeLoop);
 }
 
-function loadReverseAudio() {
-    if (reverseAudioLoadPromise) return reverseAudioLoadPromise;
+function createAudioContext() {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return Promise.reject(new Error('Web Audio API is not supported.'));
-    reverseAudioContext = reverseAudioContext || new AudioContextClass();
-    const sourceUrl = recordAudio.currentSrc || recordAudio.src;
-    reverseAudioLoadPromise = fetch(sourceUrl)
+    if (!AudioContextClass) throw new Error('Web Audio API is not supported.');
+    const probeContext = new AudioContextClass();
+    const hardwareSampleRate = probeContext.sampleRate || 48000;
+    probeContext.close();
+    try {
+        return new AudioContextClass({ sampleRate: hardwareSampleRate });
+    } catch {
+        return new AudioContextClass({ sampleRate: 48000 });
+    }
+}
+
+function initializeAudioContext() {
+    if (!audioContext) audioContext = createAudioContext();
+    return audioContext;
+}
+
+function loadAudioBuffer() {
+    if (audioLoadPromise) return audioLoadPromise;
+    const context = initializeAudioContext();
+    audioLoadPromise = fetch(AUDIO_SOURCE_URL)
         .then((response) => {
             if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
             return response.arrayBuffer();
         })
-        .then((data) => reverseAudioContext.decodeAudioData(data))
+        .then((data) => context.decodeAudioData(data))
         .then((buffer) => {
-            reverseAudioBuffer = reverseAudioContext.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+            audioBuffer = buffer;
+            reversedAudioBuffer = context.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
             for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
                 const sourceChannel = buffer.getChannelData(channel);
-                const reversedChannel = reverseAudioBuffer.getChannelData(channel);
+                const reversedChannel = reversedAudioBuffer.getChannelData(channel);
                 for (let index = 0; index < sourceChannel.length; index += 1) {
                     reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
                 }
             }
-            return reverseAudioBuffer;
+            updateAudioTime();
+            return audioBuffer;
         });
-    return reverseAudioLoadPromise;
+    audioLoadPromise.catch(() => {
+        audioLoadPromise = null;
+    });
+    return audioLoadPromise;
 }
 
-function prepareReverseAudio() {
-    loadReverseAudio().catch(() => {});
-    if (reverseAudioContext?.state === 'suspended') reverseAudioContext.resume().catch(() => {});
+function unlockAudioContext() {
+    const context = initializeAudioContext();
+    const resumePromise = context.state === 'suspended' ? context.resume() : Promise.resolve();
+    return resumePromise.then(() => {
+        if (audioUnlocked) return;
+        const silentBuffer = context.createBuffer(1, Math.max(1, Math.floor(context.sampleRate * 0.01)), context.sampleRate);
+        const silentSource = context.createBufferSource();
+        silentSource.buffer = silentBuffer;
+        silentSource.connect(context.destination);
+        silentSource.start(0);
+        silentSource.stop(context.currentTime + 0.01);
+        audioUnlocked = true;
+    });
 }
 
-function stopReverseSource(preserveTime = true) {
-    if (!reverseSource) return;
+function prepareAudio() {
+    const unlockPromise = unlockAudioContext();
+    const loadPromise = loadAudioBuffer();
+    Promise.all([unlockPromise, loadPromise])
+        .then(() => {
+            if (isAudioPlaying) startAudioSource();
+        })
+        .catch(() => {});
+}
+
+function stopAudioSource(preserveTime = true) {
+    if (!audioSource) return;
     syncLogicalAudioTime();
-    const source = reverseSource;
-    reverseSource = null;
+    const source = audioSource;
+    audioSource = null;
     source.onended = null;
-    source.stop();
+    try {
+        source.stop();
+    } catch {
+        // 再生終了済みのソースは停止処理を不要とする。
+    }
     source.disconnect();
-    cancelAnimationFrame(reverseTimeFrame);
-    reverseTimeFrame = null;
-    if (preserveTime) recordAudio.currentTime = logicalAudioTime;
+    cancelAnimationFrame(audioTimeFrame);
+    audioTimeFrame = null;
+    if (!preserveTime) logicalAudioTime = audioDirection === 'reverse' ? 0 : getAudioDuration();
     updateAudioTime();
 }
 
-function startForwardPlayback() {
-    stopReverseSource();
-    recordAudio.currentTime = logicalAudioTime;
-    const playPromise = recordAudio.play();
-    if (playPromise) playPromise.catch(() => {});
-}
-
-function startReversePlayback() {
+function startAudioSource() {
     if (!isAudioPlaying) return;
-    if (!reverseAudioBuffer) {
-        prepareReverseAudio();
-        loadReverseAudio().then(() => {
-            if (isAudioPlaying && audioDirection === 'reverse') startReversePlayback();
-        }).catch(() => {});
-        return;
-    }
-    if (!reverseSource) logicalAudioTime = recordAudio.currentTime;
-    stopReverseSource();
-    recordAudio.pause();
+    if (!audioBuffer || !reversedAudioBuffer || !audioContext || audioSource) return;
     const duration = getAudioDuration();
-    if (logicalAudioTime <= 0) {
+    if (audioDirection === 'reverse' && logicalAudioTime <= 0) {
         updatePlaying(false);
         return;
     }
-    const source = reverseAudioContext.createBufferSource();
-    source.buffer = reverseAudioBuffer;
-    source.playbackRate.value = recordAudio.playbackRate;
-    source.connect(reverseAudioContext.destination);
-    reverseSource = source;
-    reverseSourceStartedAt = reverseAudioContext.currentTime;
-    reverseSourceStartTime = logicalAudioTime;
-    reversePlaybackRate = recordAudio.playbackRate;
+    const source = audioContext.createBufferSource();
+    source.buffer = audioDirection === 'reverse' ? reversedAudioBuffer : audioBuffer;
+    source.playbackRate.value = audioSourceRate;
+    source.connect(audioContext.destination);
+    audioSource = source;
+    audioSourceStartedAt = audioContext.currentTime;
+    audioSourceStartTime = logicalAudioTime;
     source.onended = () => {
-        if (reverseSource !== source) return;
-        reverseSource = null;
-        logicalAudioTime = 0;
-        recordAudio.currentTime = 0;
+        if (audioSource !== source) return;
+        audioSource = null;
+        cancelAnimationFrame(audioTimeFrame);
+        audioTimeFrame = null;
+        logicalAudioTime = audioDirection === 'reverse' ? 0 : duration;
         updateAudioTime();
         updatePlaying(false);
     };
-    source.start(0, Math.min(duration, Math.max(0, duration - logicalAudioTime)));
-    reverseTimeFrame = requestAnimationFrame(updateReverseTime);
-    if (reverseAudioContext.state === 'suspended') reverseAudioContext.resume().catch(() => {});
+    const offset = audioDirection === 'reverse' ? duration - logicalAudioTime : logicalAudioTime;
+    source.start(0, Math.min(duration, Math.max(0, offset)));
+    audioTimeFrame = requestAnimationFrame(updateAudioTimeLoop);
 }
 
 function setAudioDirection(direction) {
     if (direction === audioDirection) return;
+    if (isAudioPlaying) stopAudioSource();
     audioDirection = direction;
-    if (!isAudioPlaying) return;
-    if (direction === 'reverse') startReversePlayback();
-    else startForwardPlayback();
+    if (isAudioPlaying) startAudioSource();
 }
 
 function renderPicker() {
@@ -264,33 +291,31 @@ function setRotation(nextRotation) {
     angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
     record.setAttribute('aria-valuenow', normalized);
     meterFill.style.width = `${Math.min(Math.abs(velocity) * 7, 100)}%`;
-    targetPlaybackRate = Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
+    targetPlaybackRate = velocity === 0 ? 1 : Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
     setAudioDirection(velocity < 0 ? 'reverse' : velocity > 0 ? 'forward' : audioDirection);
     if (!playbackRateFrame) playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
 
 function updatePlaybackRate() {
-    const difference = targetPlaybackRate - recordAudio.playbackRate;
+    const difference = targetPlaybackRate - audioSourceRate;
     if (Math.abs(difference) < 0.01) {
-        recordAudio.playbackRate = targetPlaybackRate;
-        if (reverseSource && reverseAudioContext) {
+        audioSourceRate = targetPlaybackRate;
+        if (audioSource && audioContext) {
             syncLogicalAudioTime();
-            reversePlaybackRate = recordAudio.playbackRate;
-            reverseSourceStartTime = logicalAudioTime;
-            reverseSourceStartedAt = reverseAudioContext.currentTime;
-            reverseSource.playbackRate.value = reversePlaybackRate;
+            audioSourceStartTime = logicalAudioTime;
+            audioSourceStartedAt = audioContext.currentTime;
+            audioSource.playbackRate.value = audioSourceRate;
         }
         updatePlaybackRateLabel();
         playbackRateFrame = null;
         return;
     }
-    recordAudio.playbackRate += difference * PLAYBACK_RATE_SMOOTHING;
-    if (reverseSource && reverseAudioContext) {
+    audioSourceRate += difference * PLAYBACK_RATE_SMOOTHING;
+    if (audioSource && audioContext) {
         syncLogicalAudioTime();
-        reversePlaybackRate = recordAudio.playbackRate;
-        reverseSourceStartTime = logicalAudioTime;
-        reverseSourceStartedAt = reverseAudioContext.currentTime;
-        reverseSource.playbackRate.value = reversePlaybackRate;
+        audioSourceStartTime = logicalAudioTime;
+        audioSourceStartedAt = audioContext.currentTime;
+        audioSource.playbackRate.value = audioSourceRate;
     }
     updatePlaybackRateLabel();
     playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
@@ -302,13 +327,10 @@ function updatePlaying(isPlaying) {
     playState.textContent = isPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
     if (isPlaying) {
         dragHint.classList.add('is-hidden');
-        if (recordAudio.ended) logicalAudioTime = 0;
-        prepareReverseAudio();
-        if (audioDirection === 'reverse') startReversePlayback();
-        else startForwardPlayback();
+        if (getAudioDuration() > 0 && logicalAudioTime >= getAudioDuration()) logicalAudioTime = 0;
+        prepareAudio();
     } else {
-        recordAudio.pause();
-        stopReverseSource();
+        stopAudioSource();
     }
 }
 
@@ -454,15 +476,14 @@ resetButton.addEventListener('click', () => {
     dragHint.classList.remove('is-hidden');
 });
 
-recordAudio.addEventListener('loadedmetadata', updateAudioTime);
-recordAudio.addEventListener('durationchange', updateAudioTime);
-recordAudio.addEventListener('timeupdate', () => {
-    if (audioDirection === 'forward' && !reverseSource) logicalAudioTime = recordAudio.currentTime;
-    updateAudioTime();
-});
-recordAudio.addEventListener('ended', () => updatePlaying(false));
-
 setRotation(0);
 updateAudioTime();
 updatePlaybackRateLabel();
 renderPicker();
+
+try {
+    initializeAudioContext();
+    loadAudioBuffer().catch(() => {});
+} catch {
+    // 音声未対応環境でも画面操作は継続できるようにする。
+}

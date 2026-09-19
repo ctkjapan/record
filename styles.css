@@ -366,6 +366,7 @@ h1 em {
 }
 
 .needle-arm {
+  display: none;
   position: absolute;
   z-index: 5;
   top: 7%;
@@ -921,5 +922,6 @@ h1 em {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
+    user-select: none;
   }
 }
