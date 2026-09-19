@@ -32,9 +32,12 @@ let pointerId = null;
 let lastMoveTime = 0;
 let velocity = 0;
 let momentumFrame;
+let playbackRateFrame;
+let targetPlaybackRate = 1;
 
-const MIN_PLAYBACK_RATE = 0.1;
+const MIN_PLAYBACK_RATE = 0.5;
 const MAX_PLAYBACK_RATE = 2.5;
+const PLAYBACK_RATE_SMOOTHING = 0.2;
 
 function renderPicker() {
     pickerTrack.innerHTML = records
@@ -110,7 +113,19 @@ function setRotation(nextRotation) {
     angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
     record.setAttribute('aria-valuenow', normalized);
     meterFill.style.width = `${Math.min(Math.abs(velocity) * 7, 100)}%`;
-    recordAudio.playbackRate = Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
+    targetPlaybackRate = Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
+    if (!playbackRateFrame) playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
+}
+
+function updatePlaybackRate() {
+    const difference = targetPlaybackRate - recordAudio.playbackRate;
+    if (Math.abs(difference) < 0.01) {
+        recordAudio.playbackRate = targetPlaybackRate;
+        playbackRateFrame = null;
+        return;
+    }
+    recordAudio.playbackRate += difference * PLAYBACK_RATE_SMOOTHING;
+    playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
 
 function updatePlaying(isPlaying) {
