@@ -488,7 +488,7 @@ h1 em {
 
 .player-footer {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: 25px;
   width: min(70vw, 930px);
@@ -499,6 +499,7 @@ h1 em {
   letter-spacing: .09em;
 }
 
+.audio-time-readout,
 .speed-readout,
 .angle-readout {
   display: flex;
@@ -507,6 +508,7 @@ h1 em {
   margin: 0;
 }
 
+.audio-time-readout strong,
 .speed-readout strong,
 .angle-readout strong {
   font-size: .67rem;
@@ -895,7 +897,7 @@ h1 em {
   }
 
   .player-footer {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto auto 1fr;
   }
 
   .angle-readout {

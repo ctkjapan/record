@@ -3,7 +3,8 @@ const resetButton = document.querySelector('#resetButton');
 const dragHint = document.querySelector('#dragHint');
 const recordAudio = document.querySelector('#recordAudio');
 const playState = document.querySelector('#playState');
-const rpmValue = document.querySelector('#rpmValue');
+const audioTime = document.querySelector('#audioTime');
+const playbackRateValue = document.querySelector('#playbackRateValue');
 const angleValue = document.querySelector('#angleValue');
 const meterFill = document.querySelector('#meterFill');
 const changeButton = document.querySelector('#changeButton');
@@ -34,10 +35,160 @@ let velocity = 0;
 let momentumFrame;
 let playbackRateFrame;
 let targetPlaybackRate = 1;
+let isAudioPlaying = false;
+let logicalAudioTime = 0;
+let audioDirection = 'forward';
+let reverseAudioContext;
+let reverseAudioBuffer;
+let reverseAudioLoadPromise;
+let reverseSource;
+let reverseTimeFrame;
+let reverseSourceStartedAt = 0;
+let reverseSourceStartTime = 0;
+let reversePlaybackRate = 1;
 
 const MIN_PLAYBACK_RATE = 0.5;
 const MAX_PLAYBACK_RATE = 2.5;
 const PLAYBACK_RATE_SMOOTHING = 0.2;
+
+function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
+    const totalSeconds = Math.floor(seconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const remainingSeconds = totalSeconds % 60;
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    const formattedSeconds = String(remainingSeconds).padStart(2, '0');
+    return hours > 0 ? `${String(hours).padStart(2, '0')}:${formattedMinutes}:${formattedSeconds}` : `${formattedMinutes}:${formattedSeconds}`;
+}
+
+function getAudioDuration() {
+    if (Number.isFinite(recordAudio.duration)) return recordAudio.duration;
+    return reverseAudioBuffer?.duration || 0;
+}
+
+function updateAudioTime() {
+    audioTime.textContent = `${formatTime(logicalAudioTime)} / ${formatTime(getAudioDuration())}`;
+}
+
+function updatePlaybackRateLabel() {
+    playbackRateValue.textContent = `${recordAudio.playbackRate.toFixed(2)}x`;
+}
+
+function syncLogicalAudioTime() {
+    const duration = getAudioDuration();
+    if (reverseSource && reverseAudioContext) {
+        const elapsed = Math.max(0, reverseAudioContext.currentTime - reverseSourceStartedAt);
+        logicalAudioTime = Math.min(duration, Math.max(0, reverseSourceStartTime - elapsed * reversePlaybackRate));
+    } else {
+        logicalAudioTime = Math.min(duration, Math.max(0, recordAudio.currentTime || 0));
+    }
+    updateAudioTime();
+}
+
+function updateReverseTime() {
+    if (!reverseSource) return;
+    syncLogicalAudioTime();
+    reverseTimeFrame = requestAnimationFrame(updateReverseTime);
+}
+
+function loadReverseAudio() {
+    if (reverseAudioLoadPromise) return reverseAudioLoadPromise;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return Promise.reject(new Error('Web Audio API is not supported.'));
+    reverseAudioContext = reverseAudioContext || new AudioContextClass();
+    const sourceUrl = recordAudio.currentSrc || recordAudio.src;
+    reverseAudioLoadPromise = fetch(sourceUrl)
+        .then((response) => {
+            if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
+            return response.arrayBuffer();
+        })
+        .then((data) => reverseAudioContext.decodeAudioData(data))
+        .then((buffer) => {
+            reverseAudioBuffer = reverseAudioContext.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+            for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+                const sourceChannel = buffer.getChannelData(channel);
+                const reversedChannel = reverseAudioBuffer.getChannelData(channel);
+                for (let index = 0; index < sourceChannel.length; index += 1) {
+                    reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
+                }
+            }
+            return reverseAudioBuffer;
+        });
+    return reverseAudioLoadPromise;
+}
+
+function prepareReverseAudio() {
+    loadReverseAudio().catch(() => {});
+    if (reverseAudioContext?.state === 'suspended') reverseAudioContext.resume().catch(() => {});
+}
+
+function stopReverseSource(preserveTime = true) {
+    if (!reverseSource) return;
+    syncLogicalAudioTime();
+    const source = reverseSource;
+    reverseSource = null;
+    source.onended = null;
+    source.stop();
+    source.disconnect();
+    cancelAnimationFrame(reverseTimeFrame);
+    reverseTimeFrame = null;
+    if (preserveTime) recordAudio.currentTime = logicalAudioTime;
+    updateAudioTime();
+}
+
+function startForwardPlayback() {
+    stopReverseSource();
+    recordAudio.currentTime = logicalAudioTime;
+    const playPromise = recordAudio.play();
+    if (playPromise) playPromise.catch(() => {});
+}
+
+function startReversePlayback() {
+    if (!isAudioPlaying) return;
+    if (!reverseAudioBuffer) {
+        prepareReverseAudio();
+        loadReverseAudio().then(() => {
+            if (isAudioPlaying && audioDirection === 'reverse') startReversePlayback();
+        }).catch(() => {});
+        return;
+    }
+    if (!reverseSource) logicalAudioTime = recordAudio.currentTime;
+    stopReverseSource();
+    recordAudio.pause();
+    const duration = getAudioDuration();
+    if (logicalAudioTime <= 0) {
+        updatePlaying(false);
+        return;
+    }
+    const source = reverseAudioContext.createBufferSource();
+    source.buffer = reverseAudioBuffer;
+    source.playbackRate.value = recordAudio.playbackRate;
+    source.connect(reverseAudioContext.destination);
+    reverseSource = source;
+    reverseSourceStartedAt = reverseAudioContext.currentTime;
+    reverseSourceStartTime = logicalAudioTime;
+    reversePlaybackRate = recordAudio.playbackRate;
+    source.onended = () => {
+        if (reverseSource !== source) return;
+        reverseSource = null;
+        logicalAudioTime = 0;
+        recordAudio.currentTime = 0;
+        updateAudioTime();
+        updatePlaying(false);
+    };
+    source.start(0, Math.min(duration, Math.max(0, duration - logicalAudioTime)));
+    reverseTimeFrame = requestAnimationFrame(updateReverseTime);
+    if (reverseAudioContext.state === 'suspended') reverseAudioContext.resume().catch(() => {});
+}
+
+function setAudioDirection(direction) {
+    if (direction === audioDirection) return;
+    audioDirection = direction;
+    if (!isAudioPlaying) return;
+    if (direction === 'reverse') startReversePlayback();
+    else startForwardPlayback();
+}
 
 function renderPicker() {
     pickerTrack.innerHTML = records
@@ -114,6 +265,7 @@ function setRotation(nextRotation) {
     record.setAttribute('aria-valuenow', normalized);
     meterFill.style.width = `${Math.min(Math.abs(velocity) * 7, 100)}%`;
     targetPlaybackRate = Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
+    setAudioDirection(velocity < 0 ? 'reverse' : velocity > 0 ? 'forward' : audioDirection);
     if (!playbackRateFrame) playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
 
@@ -121,23 +273,42 @@ function updatePlaybackRate() {
     const difference = targetPlaybackRate - recordAudio.playbackRate;
     if (Math.abs(difference) < 0.01) {
         recordAudio.playbackRate = targetPlaybackRate;
+        if (reverseSource && reverseAudioContext) {
+            syncLogicalAudioTime();
+            reversePlaybackRate = recordAudio.playbackRate;
+            reverseSourceStartTime = logicalAudioTime;
+            reverseSourceStartedAt = reverseAudioContext.currentTime;
+            reverseSource.playbackRate.value = reversePlaybackRate;
+        }
+        updatePlaybackRateLabel();
         playbackRateFrame = null;
         return;
     }
     recordAudio.playbackRate += difference * PLAYBACK_RATE_SMOOTHING;
+    if (reverseSource && reverseAudioContext) {
+        syncLogicalAudioTime();
+        reversePlaybackRate = recordAudio.playbackRate;
+        reverseSourceStartTime = logicalAudioTime;
+        reverseSourceStartedAt = reverseAudioContext.currentTime;
+        reverseSource.playbackRate.value = reversePlaybackRate;
+    }
+    updatePlaybackRateLabel();
     playbackRateFrame = requestAnimationFrame(updatePlaybackRate);
 }
 
 function updatePlaying(isPlaying) {
+    isAudioPlaying = isPlaying;
     document.body.classList.toggle('is-playing', isPlaying);
     playState.textContent = isPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
     if (isPlaying) {
         dragHint.classList.add('is-hidden');
-        if (recordAudio.ended) recordAudio.currentTime = 0;
-        const playPromise = recordAudio.play();
-        if (playPromise) playPromise.catch(() => {});
+        if (recordAudio.ended) logicalAudioTime = 0;
+        prepareReverseAudio();
+        if (audioDirection === 'reverse') startReversePlayback();
+        else startForwardPlayback();
     } else {
         recordAudio.pause();
+        stopReverseSource();
     }
 }
 
@@ -283,5 +454,15 @@ resetButton.addEventListener('click', () => {
     dragHint.classList.remove('is-hidden');
 });
 
+recordAudio.addEventListener('loadedmetadata', updateAudioTime);
+recordAudio.addEventListener('durationchange', updateAudioTime);
+recordAudio.addEventListener('timeupdate', () => {
+    if (audioDirection === 'forward' && !reverseSource) logicalAudioTime = recordAudio.currentTime;
+    updateAudioTime();
+});
+recordAudio.addEventListener('ended', () => updatePlaying(false));
+
 setRotation(0);
+updateAudioTime();
+updatePlaybackRateLabel();
 renderPicker();
