@@ -6,25 +6,6 @@ const audioTime = document.querySelector('#audioTime');
 const playbackRateValue = document.querySelector('#playbackRateValue');
 const angleValue = document.querySelector('#angleValue');
 const meterFill = document.querySelector('#meterFill');
-const changeButton = document.querySelector('#changeButton');
-const closePickerButton = document.querySelector('#closePickerButton');
-const pickerPanel = document.querySelector('#pickerPanel');
-const pickerTrack = document.querySelector('#pickerTrack');
-const pickerPosition = document.querySelector('#pickerPosition');
-const pickerStatus = document.querySelector('#pickerStatus');
-
-const records = [
-    { id: '001', title: 'MOSS / FIRST LIGHT', color: '#b4d34b' },
-    { id: '002', title: 'EMBER / AFTER HOURS', color: '#ed6a4e' },
-    { id: '003', title: 'GOLD / SUNDAY LOOP', color: '#d8c46a' },
-    { id: '004', title: 'TIDE / BLUE MOTION', color: '#91b9b0' },
-];
-let focusedRecordIndex = 0;
-let selectedRecordIndex = 0;
-let pickerPointerId = null;
-let pickerDragStartX = 0;
-let pickerDragStartScrollLeft = 0;
-let pickerDidDrag = false;
 
 let rotation = 0;
 let previousAngle = null;
@@ -41,6 +22,7 @@ let audioContext;
 let audioBuffer;
 let reversedAudioBuffer;
 let audioLoadPromise;
+let audioLoadRequestId = 0;
 let audioSource;
 let audioSourceStartedAt = 0;
 let audioSourceStartTime = 0;
@@ -48,10 +30,11 @@ let audioSourceRate = 1;
 let audioTimeFrame;
 let audioUnlocked = false;
 
-const MIN_PLAYBACK_RATE = 0.5;
-const MAX_PLAYBACK_RATE = 8;
+const MIN_PLAYBACK_RATE = 0.1;
+const MAX_PLAYBACK_RATE = 4;
 const PLAYBACK_RATE_SMOOTHING = 0.2;
-const AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
+const DEFAULT_AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
+let audioSourceUrl = DEFAULT_AUDIO_SOURCE_URL;
 
 function formatTime(seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) return '00:00';
@@ -78,10 +61,11 @@ function updatePlaybackRateLabel() {
 
 function syncLogicalAudioTime() {
     const duration = getAudioDuration();
-    if (audioSource && audioContext) {
+    if (audioSource && audioContext && duration > 0) {
         const elapsed = Math.max(0, audioContext.currentTime - audioSourceStartedAt);
         const directionFactor = audioDirection === 'reverse' ? -1 : 1;
-        logicalAudioTime = Math.min(duration, Math.max(0, audioSourceStartTime + elapsed * audioSourceRate * directionFactor));
+        const nextTime = audioSourceStartTime + elapsed * audioSourceRate * directionFactor;
+        logicalAudioTime = ((nextTime % duration) + duration) % duration;
     }
     updateAudioTime();
 }
@@ -113,13 +97,16 @@ function initializeAudioContext() {
 function loadAudioBuffer() {
     if (audioLoadPromise) return audioLoadPromise;
     const context = initializeAudioContext();
-    audioLoadPromise = fetch(AUDIO_SOURCE_URL)
+    const sourceUrl = audioSourceUrl;
+    const requestId = ++audioLoadRequestId;
+    audioLoadPromise = fetch(sourceUrl)
         .then((response) => {
             if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
             return response.arrayBuffer();
         })
         .then((data) => context.decodeAudioData(data))
         .then((buffer) => {
+            if (requestId !== audioLoadRequestId || sourceUrl !== audioSourceUrl) return null;
             audioBuffer = buffer;
             reversedAudioBuffer = context.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
             for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
@@ -132,10 +119,25 @@ function loadAudioBuffer() {
             updateAudioTime();
             return audioBuffer;
         });
-    audioLoadPromise.catch(() => {
-        audioLoadPromise = null;
+    const currentLoadPromise = audioLoadPromise;
+    currentLoadPromise.catch(() => {
+        if (audioLoadPromise === currentLoadPromise) audioLoadPromise = null;
     });
     return audioLoadPromise;
+}
+
+function setAudioSource(sourceUrl) {
+    const nextSourceUrl = sourceUrl || DEFAULT_AUDIO_SOURCE_URL;
+    if (nextSourceUrl === audioSourceUrl) return;
+    if (audioSource) stopAudioSource();
+    audioSourceUrl = nextSourceUrl;
+    audioLoadRequestId += 1;
+    audioLoadPromise = null;
+    audioBuffer = null;
+    reversedAudioBuffer = null;
+    logicalAudioTime = 0;
+    updateAudioTime();
+    loadAudioBuffer().catch(() => {});
 }
 
 function unlockAudioContext() {
@@ -163,7 +165,7 @@ function prepareAudio() {
         .catch(() => {});
 }
 
-function stopAudioSource(preserveTime = true) {
+function stopAudioSource() {
     if (!audioSource) return;
     syncLogicalAudioTime();
     const source = audioSource;
@@ -177,13 +179,11 @@ function stopAudioSource(preserveTime = true) {
     source.disconnect();
     cancelAnimationFrame(audioTimeFrame);
     audioTimeFrame = null;
-    if (!preserveTime) logicalAudioTime = audioDirection === 'reverse' ? 0 : getAudioDuration();
     updateAudioTime();
 }
 
 function startAudioSource() {
-    if (!isAudioPlaying) return;
-    if (!audioBuffer || !reversedAudioBuffer || !audioContext || audioSource) return;
+    if (!isAudioPlaying || !audioBuffer || !reversedAudioBuffer || !audioContext || audioSource) return;
     const duration = getAudioDuration();
     if (audioDirection === 'reverse' && logicalAudioTime <= 0) {
         updatePlaying(false);
@@ -191,20 +191,14 @@ function startAudioSource() {
     }
     const source = audioContext.createBufferSource();
     source.buffer = audioDirection === 'reverse' ? reversedAudioBuffer : audioBuffer;
+    source.loop = true;
+    source.loopStart = 0;
+    source.loopEnd = duration;
     source.playbackRate.value = audioSourceRate;
     source.connect(audioContext.destination);
     audioSource = source;
     audioSourceStartedAt = audioContext.currentTime;
     audioSourceStartTime = logicalAudioTime;
-    source.onended = () => {
-        if (audioSource !== source) return;
-        audioSource = null;
-        cancelAnimationFrame(audioTimeFrame);
-        audioTimeFrame = null;
-        logicalAudioTime = audioDirection === 'reverse' ? 0 : duration;
-        updateAudioTime();
-        updatePlaying(false);
-    };
     const offset = audioDirection === 'reverse' ? duration - logicalAudioTime : logicalAudioTime;
     source.start(0, Math.min(duration, Math.max(0, offset)));
     audioTimeFrame = requestAnimationFrame(updateAudioTimeLoop);
@@ -215,66 +209,6 @@ function setAudioDirection(direction) {
     if (isAudioPlaying) stopAudioSource();
     audioDirection = direction;
     if (isAudioPlaying) startAudioSource();
-}
-
-function renderPicker() {
-    pickerTrack.innerHTML = records
-        .map(
-            (item, index) => `
-    <button class="picker-card${index === selectedRecordIndex ? ' is-selected' : ''}${index === focusedRecordIndex ? ' is-focused' : ''}" type="button" data-record-index="${index}" data-display-index="${String(index + 1).padStart(2, '0')} / ${String(records.length).padStart(2, '0')}" aria-label="${item.title}を選択">
-      <span class="picker-disc" style="--disc-color: ${item.color}"></span>
-      <p>${item.id}<strong>${item.title}</strong></p>
-    </button>
-  `,
-        )
-        .join('');
-}
-
-function setFocusedRecord(index) {
-    focusedRecordIndex = Math.max(0, Math.min(records.length - 1, index));
-    pickerTrack.querySelectorAll('.picker-card').forEach((card, cardIndex) => {
-        card.classList.toggle('is-focused', cardIndex === focusedRecordIndex);
-    });
-    pickerPosition.textContent = String(focusedRecordIndex + 1).padStart(2, '0');
-    pickerStatus.textContent = focusedRecordIndex === selectedRecordIndex ? '中央のレコードをクリックして選択' : `${records[focusedRecordIndex].title} をクリックして変更`;
-}
-
-function selectRecord(index) {
-    selectedRecordIndex = index;
-    const nextRecord = records[index];
-    const [artist, title] = nextRecord.title.split(' / ');
-    document.querySelector('.label strong').textContent = nextRecord.id;
-    document.documentElement.style.setProperty('--accent', nextRecord.color);
-    document.querySelector('.session-label').textContent = nextRecord.id;
-    document.querySelector('#albumNumber').textContent = String(index + 1).padStart(2, '0');
-    document.querySelector('#albumArtist').textContent = artist;
-    document.querySelector('#albumTitle').textContent = title;
-    pickerTrack.querySelectorAll('.picker-card').forEach((card, cardIndex) => {
-        card.classList.toggle('is-selected', cardIndex === selectedRecordIndex);
-    });
-    pickerStatus.textContent = `${nextRecord.title} を再生中`;
-}
-
-function openPicker() {
-    stopMomentum();
-    updatePlaying(false);
-    pickerPanel.hidden = false;
-    document.querySelector('.player').hidden = true;
-    document.body.classList.add('picker-open');
-    changeButton.textContent = 'SELECTING';
-    changeButton.setAttribute('aria-pressed', 'true');
-    setFocusedRecord(selectedRecordIndex);
-    requestAnimationFrame(() => {
-        pickerTrack.querySelector(`[data-record-index="${selectedRecordIndex}"]`).scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'center' });
-    });
-}
-
-function closePicker() {
-    pickerPanel.hidden = true;
-    document.querySelector('.player').hidden = false;
-    document.body.classList.remove('picker-open');
-    changeButton.textContent = 'COLLECTION';
-    changeButton.setAttribute('aria-pressed', 'false');
 }
 
 function angleFromCenter(event) {
@@ -334,6 +268,11 @@ function updatePlaying(isPlaying) {
     }
 }
 
+function stopPlayback() {
+    stopMomentum();
+    updatePlaying(false);
+}
+
 function stopMomentum() {
     cancelAnimationFrame(momentumFrame);
     velocity = 0;
@@ -386,84 +325,15 @@ function releasePointer(event) {
 record.addEventListener('pointerup', releasePointer);
 record.addEventListener('pointercancel', releasePointer);
 
-pickerTrack.addEventListener(
-    'scroll',
-    () => {
-        const trackBounds = pickerTrack.getBoundingClientRect();
-        const trackCenter = trackBounds.left + trackBounds.width / 2;
-        let closestIndex = 0;
-        let closestDistance = Infinity;
-        pickerTrack.querySelectorAll('.picker-card').forEach((card, index) => {
-            const bounds = card.getBoundingClientRect();
-            const distance = Math.abs(bounds.left + bounds.width / 2 - trackCenter);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestIndex = index;
-            }
-        });
-        if (closestIndex !== focusedRecordIndex) setFocusedRecord(closestIndex);
-    },
-    { passive: true },
-);
-
-pickerTrack.addEventListener('pointerdown', (event) => {
-    if (event.pointerType !== 'mouse' || event.button !== 0) return;
-    pickerPointerId = event.pointerId;
-    pickerDragStartX = event.clientX;
-    pickerDragStartScrollLeft = pickerTrack.scrollLeft;
-    pickerDidDrag = false;
-    pickerTrack.setPointerCapture(pickerPointerId);
-    pickerTrack.classList.add('is-dragging');
-});
-
-pickerTrack.addEventListener('pointermove', (event) => {
-    if (event.pointerId !== pickerPointerId) return;
-    const distance = event.clientX - pickerDragStartX;
-    if (Math.abs(distance) > 4) pickerDidDrag = true;
-    pickerTrack.scrollLeft = pickerDragStartScrollLeft - distance;
-});
-
-function releasePickerPointer(event) {
-    if (event.pointerId !== pickerPointerId) return;
-    pickerPointerId = null;
-    pickerTrack.classList.remove('is-dragging');
-}
-
-pickerTrack.addEventListener('pointerup', releasePickerPointer);
-pickerTrack.addEventListener('pointercancel', releasePickerPointer);
-pickerTrack.addEventListener('lostpointercapture', releasePickerPointer);
-
-pickerTrack.addEventListener('click', (event) => {
-    if (pickerDidDrag) {
-        pickerDidDrag = false;
-        return;
-    }
-    const disc = event.target.closest('.picker-disc');
-    if (!disc) return;
-    const card = disc.closest('.picker-card');
-    const index = Number(card.dataset.recordIndex);
-    if (index === focusedRecordIndex) {
-        selectRecord(index);
-        closePicker();
-    } else {
-        setFocusedRecord(index);
-        card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-});
-
-changeButton.addEventListener('click', openPicker);
-closePickerButton.addEventListener('click', closePicker);
-
 record.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        event.preventDefault();
-        const direction = event.key === 'ArrowRight' ? 1 : -1;
-        velocity = direction * 2;
-        setRotation(rotation + direction * 12);
-        updatePlaying(true);
-        cancelAnimationFrame(momentumFrame);
-        momentumFrame = requestAnimationFrame(applyMomentum);
-    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    velocity = direction * 2;
+    setRotation(rotation + direction * 12);
+    updatePlaying(true);
+    cancelAnimationFrame(momentumFrame);
+    momentumFrame = requestAnimationFrame(applyMomentum);
 });
 
 resetButton.addEventListener('click', () => {
@@ -476,10 +346,14 @@ resetButton.addEventListener('click', () => {
     dragHint.classList.remove('is-hidden');
 });
 
+window.RecordPlayer = Object.freeze({
+    setAudioSource,
+    stop: stopPlayback,
+});
+
 setRotation(0);
 updateAudioTime();
 updatePlaybackRateLabel();
-renderPicker();
 
 try {
     initializeAudioContext();
