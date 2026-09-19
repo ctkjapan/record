@@ -1,6 +1,7 @@
 const record = document.querySelector('#record');
 const resetButton = document.querySelector('#resetButton');
 const dragHint = document.querySelector('#dragHint');
+const recordAudio = document.querySelector('#recordAudio');
 const playState = document.querySelector('#playState');
 const rpmValue = document.querySelector('#rpmValue');
 const angleValue = document.querySelector('#angleValue');
@@ -32,11 +33,14 @@ let lastMoveTime = 0;
 let velocity = 0;
 let momentumFrame;
 
+const MIN_PLAYBACK_RATE = 0.1;
+const MAX_PLAYBACK_RATE = 2.5;
+
 function renderPicker() {
     pickerTrack.innerHTML = records
         .map(
             (item, index) => `
-    <button class="picker-card${index === selectedRecordIndex ? ' is-selected' : ''}${index === focusedRecordIndex ? ' is-focused' : ''}" type="button" data-record-index="${index}" aria-label="${item.title}を選択">
+    <button class="picker-card${index === selectedRecordIndex ? ' is-selected' : ''}${index === focusedRecordIndex ? ' is-focused' : ''}" type="button" data-record-index="${index}" data-display-index="${String(index + 1).padStart(2, '0')} / ${String(records.length).padStart(2, '0')}" aria-label="${item.title}を選択">
       <span class="picker-disc" style="--disc-color: ${item.color}"></span>
       <p>${item.id}<strong>${item.title}</strong></p>
     </button>
@@ -57,9 +61,13 @@ function setFocusedRecord(index) {
 function selectRecord(index) {
     selectedRecordIndex = index;
     const nextRecord = records[index];
+    const [artist, title] = nextRecord.title.split(' / ');
     document.querySelector('.label strong').textContent = nextRecord.id;
-    document.querySelector('.label').style.background = nextRecord.color;
-    document.querySelector('.session-label').innerHTML = `SIDE A <span>/</span> ${nextRecord.id}`;
+    document.documentElement.style.setProperty('--accent', nextRecord.color);
+    document.querySelector('.session-label').textContent = nextRecord.id;
+    document.querySelector('#albumNumber').textContent = String(index + 1).padStart(2, '0');
+    document.querySelector('#albumArtist').textContent = artist;
+    document.querySelector('#albumTitle').textContent = title;
     pickerTrack.querySelectorAll('.picker-card').forEach((card, cardIndex) => {
         card.classList.toggle('is-selected', cardIndex === selectedRecordIndex);
     });
@@ -71,7 +79,8 @@ function openPicker() {
     updatePlaying(false);
     pickerPanel.hidden = false;
     document.querySelector('.player').hidden = true;
-    changeButton.textContent = '選択中';
+    document.body.classList.add('picker-open');
+    changeButton.textContent = 'SELECTING';
     changeButton.setAttribute('aria-pressed', 'true');
     setFocusedRecord(selectedRecordIndex);
     requestAnimationFrame(() => {
@@ -82,7 +91,8 @@ function openPicker() {
 function closePicker() {
     pickerPanel.hidden = true;
     document.querySelector('.player').hidden = false;
-    changeButton.textContent = '変更';
+    document.body.classList.remove('picker-open');
+    changeButton.textContent = 'COLLECTION';
     changeButton.setAttribute('aria-pressed', 'false');
 }
 
@@ -100,12 +110,20 @@ function setRotation(nextRotation) {
     angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
     record.setAttribute('aria-valuenow', normalized);
     meterFill.style.width = `${Math.min(Math.abs(velocity) * 7, 100)}%`;
+    recordAudio.playbackRate = Math.min(Math.max(Math.abs(velocity), MIN_PLAYBACK_RATE), MAX_PLAYBACK_RATE);
 }
 
 function updatePlaying(isPlaying) {
     document.body.classList.toggle('is-playing', isPlaying);
     playState.textContent = isPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
-    if (isPlaying) dragHint.classList.add('is-hidden');
+    if (isPlaying) {
+        dragHint.classList.add('is-hidden');
+        if (recordAudio.ended) recordAudio.currentTime = 0;
+        const playPromise = recordAudio.play();
+        if (playPromise) playPromise.catch(() => {});
+    } else {
+        recordAudio.pause();
+    }
 }
 
 function stopMomentum() {
@@ -131,7 +149,6 @@ record.addEventListener('pointerdown', (event) => {
     previousAngle = angleFromCenter(event);
     lastMoveTime = performance.now();
     record.setPointerCapture(pointerId);
-    updatePlaying(true);
 });
 
 record.addEventListener('pointermove', (event) => {
@@ -143,6 +160,7 @@ record.addEventListener('pointermove', (event) => {
     const now = performance.now();
     const elapsed = Math.max(now - lastMoveTime, 1);
     velocity = (delta / elapsed) * 16;
+    if (delta !== 0) updatePlaying(true);
     setRotation(rotation + delta);
     previousAngle = currentAngle;
     lastMoveTime = now;

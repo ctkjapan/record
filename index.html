@@ -4,12 +4,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0b0d0c" />
-  <title>GROOVE / spin your record</title>
+  <meta name="theme-color" content="#d5b98f" />
+  <title>GROOVE RECORDS — Interactive Vinyl Player</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
     rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -17,22 +17,23 @@
 <body>
   <main class="app-shell">
     <header class="top-bar">
-      <a class="wordmark" href="./">GROOVE<span>.</span></a>
-      <p class="session-label">SIDE A <span>/</span> 001</p>
+      <a class="wordmark" href="./" aria-label="GROOVE RECORDS ホーム">
+        <span class="wordmark-mark" aria-hidden="true"></span>
+        <span>GROOVE<br />RECORDS</span>
+      </a>
+      <p class="shop-note">AN INTERACTIVE VINYL ARCHIVE<br />TOKYO, JAPAN</p>
       <div class="top-bar-actions">
-        <button class="change-button" id="changeButton" type="button">変更</button>
+        <button class="change-button" id="changeButton" type="button" aria-pressed="false">COLLECTION</button>
         <button class="icon-button" id="resetButton" type="button" aria-label="レコードを最初の位置に戻す" title="リセット">↺</button>
       </div>
     </header>
 
     <section class="hero" aria-labelledby="pageTitle">
-      <!--
-      <div class="intro">
-        <p class="eyebrow">AN ANALOG INTERFACE</p>
-        <h1 id="pageTitle">針を落として、<br /><em>音を回す。</em></h1>
-        <p class="description">円盤をスワイプして、指先でグルーヴを探そう。</p>
+      <div class="album-heading">
+        <p class="eyebrow">NOW ON THE TURNTABLE</p>
+        <p class="album-index"><span id="albumNumber">01</span> / 04</p>
+        <h1 id="pageTitle"><span id="albumArtist">MOSS</span><em id="albumTitle">FIRST LIGHT</em></h1>
       </div>
-      -->
       <div class="now-playing" aria-live="polite">
         <span class="status-dot"></span>
         <span id="playState">READY TO SPIN</span>
@@ -40,7 +41,12 @@
     </section>
 
     <section class="player" aria-label="レコードプレーヤー">
+      <audio id="recordAudio" preload="auto" src="mp3/1-01%20Dance!.mp3" aria-hidden="true"></audio>
       <div class="player-stage">
+        <div class="deck-details deck-details-left" aria-hidden="true">
+          <span>33⅓</span>
+          <small>MANUAL<br />DRIVE</small>
+        </div>
         <div class="record-shadow" aria-hidden="true"></div>
         <div class="record" id="record" role="slider" tabindex="0" aria-label="レコードを回す" aria-valuemin="0"
           aria-valuemax="360" aria-valuenow="0">
@@ -58,10 +64,11 @@
           <div class="needle-stick"></div>
           <div class="needle-head"></div>
         </div>
-        <div class="drag-hint" id="dragHint"><span>↻</span> SWIPE TO SPIN</div>
+        <div class="drag-hint" id="dragHint"><span>↻</span> DRAG THE VINYL</div>
+        <p class="deck-caption">SIDE A <span>/</span> <strong class="session-label">001</strong></p>
       </div>
       <div class="player-footer">
-        <div class="speed-readout"><span>RPM</span><strong id="rpmValue">33⅓</strong></div>
+        <div class="speed-readout"><span>SPEED</span><strong id="rpmValue">33⅓ RPM</strong></div>
         <div class="meter" aria-label="回転速度"><span id="meterFill"></span></div>
         <p class="angle-readout"><span>ROTATION</span><strong id="angleValue">000°</strong></p>
       </div>
@@ -70,10 +77,10 @@
     <section class="picker-panel" id="pickerPanel" aria-label="レコードを変更" hidden>
       <div class="picker-heading">
         <div>
-          <p class="eyebrow">SELECT A RECORD</p>
-          <h2>次の一枚を選ぶ。</h2>
+          <p class="eyebrow">THE VINYL ARCHIVE</p>
+          <h2>Choose<br />your record.</h2>
         </div>
-        <button class="close-button" id="closePickerButton" type="button">戻る</button>
+        <button class="close-button" id="closePickerButton" type="button">BACK TO PLAYER</button>
       </div>
       <div class="picker-window">
         <div class="picker-track" id="pickerTrack"></div>
@@ -81,12 +88,13 @@
       <div class="picker-footer">
         <p><span id="pickerPosition">01</span> / 04</p>
         <p id="pickerStatus">中央のレコードをクリックして選択</p>
+        <p class="picker-instruction">DRAG TO BROWSE →</p>
       </div>
     </section>
 
     <footer class="footer-note">
-      <p>手の動きが、そのまま音の流れになる。</p>
-      <span>© 2024 GROOVE LAB</span>
+      <p>SELECT · DROP · SPIN</p>
+      <span>© 2026 GROOVE ARCHIVE</span>
     </footer>
   </main>
   <script src="script.js"></script>
