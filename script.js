@@ -149,6 +149,8 @@ record.addEventListener('pointerdown', (event) => {
     previousAngle = angleFromCenter(event);
     lastMoveTime = performance.now();
     record.setPointerCapture(pointerId);
+    // モバイルブラウザの自動再生制限を満たすため、ユーザー操作中に再生を開始する。
+    updatePlaying(true);
 });
 
 record.addEventListener('pointermove', (event) => {
@@ -160,7 +162,6 @@ record.addEventListener('pointermove', (event) => {
     const now = performance.now();
     const elapsed = Math.max(now - lastMoveTime, 1);
     velocity = (delta / elapsed) * 16;
-    if (delta !== 0) updatePlaying(true);
     setRotation(rotation + delta);
     previousAngle = currentAngle;
     lastMoveTime = now;
