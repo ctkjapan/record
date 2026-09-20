@@ -4,7 +4,7 @@ const pickerPanel = document.querySelector('#pickerPanel');
 const pickerTrack = document.querySelector('#pickerTrack');
 const pickerPosition = document.querySelector('#pickerPosition');
 const pickerStatus = document.querySelector('#pickerStatus');
-const playerPanel = document.querySelector('.player');
+const playerPanel = document.querySelector('#playerPanel');
 const albumNumber = document.querySelector('#albumNumber');
 const albumArtist = document.querySelector('#albumArtist');
 const albumTitle = document.querySelector('#albumTitle');
@@ -15,7 +15,7 @@ const pickerPageBody = document.body;
 const records = [
     { id: '001', title: 'P4D / Dance!', color: '#b4d34b', audioUrl: 'mp3/1-01%20Dance!.mp3' },
     { id: '002', title: 'P5 / Life Will Change', color: '#ed6a4e', audioUrl: 'mp3/04%20Life%20Will%20Change.mp3' },
-    { id: '003', title: 'JSR / All', color: '#d8c46a', audioUrl: 'mp3/JSR.mp3' },
+    { id: '003', title: 'SEKAI NO OWARI / 虹色の戦争', color: '#d8c46a', audioUrl: 'mp3/虹色の戦争.mp3' },
     { id: '004', title: 'Mrs. GREEN APPLE / 青と夏', color: '#91b9b0', audioUrl: 'mp3/mga_2.mp3' },
 ];
 

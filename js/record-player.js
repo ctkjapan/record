@@ -3,9 +3,12 @@ const resetButton = document.querySelector('#resetButton');
 const dragHint = document.querySelector('#dragHint');
 const playState = document.querySelector('#playState');
 const audioTime = document.querySelector('#audioTime');
+const audioSeek = document.querySelector('#audioSeek');
 const playbackRateValue = document.querySelector('#playbackRateValue');
 const angleValue = document.querySelector('#angleValue');
 const meterFill = document.querySelector('#meterFill');
+const visualizerCanvas = document.querySelector('#visualizer');
+const visualizerContext = visualizerCanvas?.getContext('2d');
 const pageBody = document.body;
 
 let rotation = 0;
@@ -27,6 +30,9 @@ let audioLoadRequestId = 0;
 let audioLoadController;
 const audioBufferCache = new Map();
 let audioSource;
+let audioAnalyser;
+let visualizerFrame;
+let visualizerData;
 let audioSourceStartedAt = 0;
 let audioSourceStartTime = 0;
 let audioSourceRate = 1;
@@ -34,6 +40,7 @@ let audioTimeFrame;
 let audioUnlocked = false;
 let isAudioLoading = false;
 let audioLoadProgress = 0;
+let isSeeking = false;
 let lastAudioTimeLabel = '';
 let lastPlaybackRateLabel = '';
 let lastPlayStateLabel = '';
@@ -41,9 +48,11 @@ let lastAudioBusyState = null;
 
 const ATTENUATION_RATE = 1;
 const MIN_PLAYBACK_RATE = 0;
-const MAX_PLAYBACK_RATE = 4;
+const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_SMOOTHING = 0.1;
-const ROTATION_SPEED_SCALE = 4;
+const ROTATION_SPEED_SCALE = 8;
+const MIN_CENTER = 45;
+const MAX_CENTER = 55;
 const DEFAULT_AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
 let audioSourceUrl = DEFAULT_AUDIO_SOURCE_URL;
 
@@ -63,10 +72,17 @@ function getAudioDuration() {
 }
 
 function updateAudioTime() {
-    const nextLabel = `${formatTime(logicalAudioTime)} / ${formatTime(getAudioDuration())}`;
-    if (nextLabel === lastAudioTimeLabel) return;
-    audioTime.textContent = nextLabel;
-    lastAudioTimeLabel = nextLabel;
+    const duration = getAudioDuration();
+    const nextLabel = `${formatTime(logicalAudioTime)} / ${formatTime(duration)}`;
+    if (nextLabel !== lastAudioTimeLabel) {
+        audioTime.textContent = nextLabel;
+        lastAudioTimeLabel = nextLabel;
+    }
+    if (audioSeek) {
+        audioSeek.max = String(duration);
+        audioSeek.disabled = duration <= 0;
+        if (!isSeeking) audioSeek.value = String(Math.min(logicalAudioTime, duration));
+    }
 }
 
 function updatePlaybackRateLabel() {
@@ -129,7 +145,7 @@ async function readAudioResponse(response) {
 
 function syncLogicalAudioTime() {
     const duration = getAudioDuration();
-    if (audioSource && audioContext && duration > 0) {
+    if (!isSeeking && audioSource && audioContext && duration > 0) {
         const elapsed = Math.max(0, audioContext.currentTime - audioSourceStartedAt);
         const directionFactor = audioDirection === 'reverse' ? -1 : 1;
         const nextTime = audioSourceStartTime + elapsed * audioSourceRate * directionFactor;
@@ -160,6 +176,73 @@ function createAudioContext() {
 function initializeAudioContext() {
     if (!audioContext) audioContext = createAudioContext();
     return audioContext;
+}
+
+function initializeAudioAnalyser(context) {
+    if (audioAnalyser || !visualizerCanvas || !visualizerContext) return audioAnalyser;
+    audioAnalyser = context.createAnalyser();
+    audioAnalyser.fftSize = 128;
+    audioAnalyser.smoothingTimeConstant = 0.8;
+    audioAnalyser.connect(context.destination);
+    visualizerData = new Uint8Array(audioAnalyser.frequencyBinCount);
+    return audioAnalyser;
+}
+
+function resizeVisualizerCanvas() {
+    if (!visualizerCanvas || !visualizerContext) return null;
+    const bounds = visualizerCanvas.getBoundingClientRect();
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, Math.floor(bounds.width * pixelRatio));
+    const height = Math.max(1, Math.floor(bounds.height * pixelRatio));
+    if (visualizerCanvas.width !== width || visualizerCanvas.height !== height) {
+        visualizerCanvas.width = width;
+        visualizerCanvas.height = height;
+        visualizerContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    }
+    return { width: bounds.width, height: bounds.height, bounds };
+}
+
+function clearVisualizer() {
+    cancelAnimationFrame(visualizerFrame);
+    visualizerFrame = null;
+    if (!visualizerCanvas || !visualizerContext) return;
+    const size = resizeVisualizerCanvas();
+    if (size) visualizerContext.clearRect(0, 0, size.width, size.height);
+}
+
+function updateVisualizer() {
+    if (!audioSource || !audioAnalyser || !visualizerContext || !visualizerData) {
+        clearVisualizer();
+        return;
+    }
+    const size = resizeVisualizerCanvas();
+    if (!size) return;
+    audioAnalyser.getByteFrequencyData(visualizerData);
+    const recordBounds = record.getBoundingClientRect();
+    const centerX = recordBounds.left - size.bounds.left + recordBounds.width / 2;
+    const centerY = recordBounds.top - size.bounds.top + recordBounds.height / 2;
+    const baseRadius = recordBounds.width / 2 + 12;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#83bd98';
+    const barCount = visualizerData.length;
+    const barAngle = (Math.PI * 2) / barCount;
+
+    visualizerContext.clearRect(0, 0, size.width, size.height);
+    visualizerContext.lineWidth = 2;
+    visualizerContext.lineCap = 'round';
+    for (let index = 0; index < barCount; index += 1) {
+        const amplitude = visualizerData[index] / 255;
+        const angle = index * barAngle - Math.PI / 2;
+        const innerRadius = baseRadius;
+        const outerRadius = innerRadius + 8 + amplitude * 52;
+        visualizerContext.strokeStyle = accent;
+        visualizerContext.globalAlpha = 0.16 + amplitude * 0.55;
+        visualizerContext.beginPath();
+        visualizerContext.moveTo(centerX + Math.cos(angle) * innerRadius, centerY + Math.sin(angle) * innerRadius);
+        visualizerContext.lineTo(centerX + Math.cos(angle) * outerRadius, centerY + Math.sin(angle) * outerRadius);
+        visualizerContext.stroke();
+    }
+    visualizerContext.globalAlpha = 1;
+    visualizerFrame = requestAnimationFrame(updateVisualizer);
 }
 
 function loadAudioBuffer() {
@@ -230,6 +313,7 @@ function setAudioSource(sourceUrl) {
     audioBuffer = null;
     reversedAudioBuffer = null;
     logicalAudioTime = 0;
+    isSeeking = false;
     updateAudioTime();
     audioLoadProgress = 0;
     isAudioLoading = true;
@@ -284,6 +368,7 @@ function prepareAudio() {
 }
 
 function stopAudioSource() {
+    clearVisualizer();
     if (!audioSource) return;
     syncLogicalAudioTime();
     const source = audioSource;
@@ -300,6 +385,24 @@ function stopAudioSource() {
     updateAudioTime();
 }
 
+function updateSeekPreview() {
+    const duration = getAudioDuration();
+    if (!audioSeek || duration <= 0) return;
+    isSeeking = true;
+    logicalAudioTime = Math.max(0, Math.min(duration, Number(audioSeek.value)));
+    updateAudioTime();
+}
+
+function commitSeek() {
+    if (!isSeeking) return;
+    if (audioSource) {
+        stopAudioSource();
+        if (isAudioPlaying) startAudioSource();
+    }
+    isSeeking = false;
+    updateAudioTime();
+}
+
 function startAudioSource() {
     if (!isAudioPlaying || !audioBuffer || !reversedAudioBuffer || !audioContext || audioSource) return;
     const duration = getAudioDuration();
@@ -313,13 +416,14 @@ function startAudioSource() {
     source.loopStart = 0;
     source.loopEnd = duration;
     source.playbackRate.value = audioSourceRate;
-    source.connect(audioContext.destination);
+    source.connect(initializeAudioAnalyser(audioContext) || audioContext.destination);
     audioSource = source;
     audioSourceStartedAt = audioContext.currentTime;
     audioSourceStartTime = logicalAudioTime;
     const offset = audioDirection === 'reverse' ? duration - logicalAudioTime : logicalAudioTime;
     source.start(0, Math.min(duration, Math.max(0, offset)));
     audioTimeFrame = requestAnimationFrame(updateAudioTimeLoop);
+    visualizerFrame = requestAnimationFrame(updateVisualizer);
 }
 
 function setAudioDirection(direction) {
@@ -341,13 +445,13 @@ function getRotationSpeedPercent() {
 }
 
 function getPlaybackRateForSpeed(speedPercent) {
-    if (speedPercent <= 40) {
-        return MIN_PLAYBACK_RATE + (speedPercent / 40) * (1 - MIN_PLAYBACK_RATE);
+    if (speedPercent <= MIN_CENTER) {
+        return MIN_PLAYBACK_RATE + (speedPercent / MIN_CENTER) * (1 - MIN_PLAYBACK_RATE);
     }
-    if (speedPercent <= 60) {
+    if (speedPercent <= MAX_CENTER) {
         return 1;
     }
-    return 1 + ((speedPercent - 60) / 40) * (MAX_PLAYBACK_RATE - 1);
+    return 1 + ((speedPercent - MAX_CENTER) / MIN_CENTER) * (MAX_PLAYBACK_RATE - 1);
 }
 
 function setRotation(nextRotation) {
@@ -473,12 +577,19 @@ record.addEventListener('keydown', (event) => {
 
 resetButton.addEventListener('click', () => {
     stopMomentum();
+    isSeeking = false;
     rotation = 0;
     record.style.transform = 'rotate(0deg)';
     angleValue.textContent = '000°';
     record.setAttribute('aria-valuenow', '0');
     updatePlaying(false);
     dragHint.classList.remove('is-hidden');
+});
+
+audioSeek.addEventListener('input', updateSeekPreview);
+audioSeek.addEventListener('change', commitSeek);
+audioSeek.addEventListener('keyup', (event) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') commitSeek();
 });
 
 window.RecordPlayer = Object.freeze({
