@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#d5b98f" />
-  <title>GROOVE RECORDS — Interactive Vinyl Player</title>
+  <title>GROOVE RECORDS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -29,7 +29,7 @@
 
     <section id="hero" class="hero" aria-labelledby="pageTitle">
       <div class="album-heading">
-        <p class="album-index"><span id="albumNumber">01</span> / <span id="albumMaxNumber">07</span></p>
+        <p class="album-index"><span id="albumNumber">01</span> / <span id="albumMaxNumber">99</span></p>
         <h1 id="pageTitle"><span id="albumArtist">Artist</span><em id="albumTitle">Title</em></h1>
       </div>
       <div class="now-playing" aria-live="polite">
@@ -78,14 +78,14 @@
         <div class="picker-track" id="pickerTrack"></div>
       </div>
       <div class="picker-footer">
-        <p><span id="pickerPosition">01</span> / 04</p>
+        <span><span id="pickerPosition">01</span> / <span id="pickerPositionMax">99</span></p>
         <p id="pickerStatus">中央のレコードをクリックして選択</p>
         <p class="picker-instruction">DRAG TO BROWSE →</p>
       </div>
     </section>
   </main>
   <script src="js/record-player.js?260920_6"></script>
-  <script src="js/record-picker.js?260920_5"></script>
+  <script src="js/record-picker.js?260920_6"></script>
 </body>
 
 </html>

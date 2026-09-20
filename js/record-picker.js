@@ -4,6 +4,8 @@ const pickerPanel = document.querySelector('#pickerPanel');
 const pickerTrack = document.querySelector('#pickerTrack');
 const pickerPosition = document.querySelector('#pickerPosition');
 const pickerStatus = document.querySelector('#pickerStatus');
+const albumMaxNumber = document.querySelector('#albumMaxNumber');
+const pickerPositionMax = document.querySelector('#pickerPositionMax');
 const playerPanel = document.querySelector('#playerPanel');
 const albumNumber = document.querySelector('#albumNumber');
 const albumArtist = document.querySelector('#albumArtist');
@@ -18,10 +20,10 @@ const records = [
     { id: '003', title: 'SEKAI NO OWARI / 虹色の戦争', color: '#54c9c5', audioUrl: 'mp3/虹色の戦争.mp3' },
     { id: '004', title: 'Mrs. GREEN APPLE / 青と夏', color: '#02599e', audioUrl: 'mp3/mga_2.mp3' },
     { id: '005', title: 'Earth, Wind & Fire / September', color: '#eaa734', audioUrl: 'mp3/Earth, Wind & Fire - September.mp3' },
-    { id: '007', title: 'Ken Ishii / Extra', color: '#c9c94d', audioUrl: 'mp3/Ken Ishii - Extra.mp3' },
-    { id: '008', title: 'Creepy Nuts / Bling-Bang-Bang-Born', color: '#c90665', audioUrl: 'mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3' },
-    { id: '009', title: 'Metaphor: ReFantazio / 英雄譚序曲', color: '#eeeeee', audioUrl: 'mp3/英雄譚序曲.mp3' },
-    { id: '010', title: 'Official髭男dism / Pretender', color: '#b97959', audioUrl: 'mp3/Official髭男dism - Pretender.mp3' },
+    { id: '006', title: 'Ken Ishii / Extra', color: '#c9c94d', audioUrl: 'mp3/Ken Ishii - Extra.mp3' },
+    { id: '007', title: 'Creepy Nuts / Bling-Bang-Bang-Born', color: '#c90665', audioUrl: 'mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3' },
+    { id: '008', title: 'Metaphor: ReFantazio / 英雄譚序曲', color: '#eeeeee', audioUrl: 'mp3/英雄譚序曲.mp3' },
+    { id: '009', title: 'Official髭男dism / Pretender', color: '#b97959', audioUrl: 'mp3/Official髭男dism - Pretender.mp3' },
 ];
 let focusedRecordIndex = 0;
 let selectedRecordIndex = 0;
@@ -34,7 +36,14 @@ let pickerSelectedOnPointerUp = false;
 let pickerCards = [];
 let pickerScrollFrame;
 
+function updateRecordCount() {
+    const recordCount = String(records.length).padStart(2, '0');
+    albumMaxNumber.textContent = recordCount;
+    pickerPositionMax.textContent = recordCount;
+}
+
 function renderPicker() {
+    updateRecordCount();
     pickerTrack.innerHTML = records
         .map(
             (item, index) => `
