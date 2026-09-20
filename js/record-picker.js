@@ -28,6 +28,7 @@ let pickerDidDrag = false;
 let pickerPointerStartIndex = null;
 let pickerSelectedOnPointerUp = false;
 let pickerCards = [];
+let pickerScrollFrame;
 
 function renderPicker() {
     pickerTrack.innerHTML = records
@@ -90,22 +91,27 @@ function closePicker() {
     changeButton.setAttribute('aria-pressed', 'false');
 }
 
+function updateFocusedRecordFromScroll() {
+    pickerScrollFrame = null;
+    const trackBounds = pickerTrack.getBoundingClientRect();
+    const trackCenter = trackBounds.left + trackBounds.width / 2;
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    pickerCards.forEach((card, index) => {
+        const bounds = card.getBoundingClientRect();
+        const distance = Math.abs(bounds.left + bounds.width / 2 - trackCenter);
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = index;
+        }
+    });
+    if (closestIndex !== focusedRecordIndex) setFocusedRecord(closestIndex);
+}
+
 pickerTrack.addEventListener(
     'scroll',
     () => {
-        const trackBounds = pickerTrack.getBoundingClientRect();
-        const trackCenter = trackBounds.left + trackBounds.width / 2;
-        let closestIndex = 0;
-        let closestDistance = Infinity;
-        pickerCards.forEach((card, index) => {
-            const bounds = card.getBoundingClientRect();
-            const distance = Math.abs(bounds.left + bounds.width / 2 - trackCenter);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestIndex = index;
-            }
-        });
-        if (closestIndex !== focusedRecordIndex) setFocusedRecord(closestIndex);
+        if (!pickerScrollFrame) pickerScrollFrame = requestAnimationFrame(updateFocusedRecordFromScroll);
     },
     { passive: true },
 );

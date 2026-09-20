@@ -11,7 +11,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?260919_2" />
+  <link rel="stylesheet" href="styles.css?260920_5" />
 </head>
 
 <body>
@@ -21,16 +21,14 @@
         <span class="wordmark-mark" aria-hidden="true"></span>
         <span>GROOVE<br />RECORDS</span>
       </a>
-      <p class="shop-note"></p>
       <div class="top-bar-actions">
         <button class="change-button" id="changeButton" type="button" aria-pressed="false">COLLECTION</button>
         <button class="icon-button" id="resetButton" type="button" aria-label="レコードを最初の位置に戻す" title="リセット">↺</button>
       </div>
     </header>
 
-    <section class="hero" aria-labelledby="pageTitle">
+    <section id="hero" class="hero" aria-labelledby="pageTitle">
       <div class="album-heading">
-        <p class="eyebrow">NOW ON THE TURNTABLE</p>
         <p class="album-index"><span id="albumNumber">01</span> / 04</p>
         <h1 id="pageTitle"><span id="albumArtist">P4D</span><em id="albumTitle">Dance!</em></h1>
       </div>
@@ -40,8 +38,8 @@
       </div>
     </section>
 
-    <section class="player" aria-label="レコードプレーヤー">
-      <div class="player-stage">
+    <section id="player" class="player" aria-label="レコードプレーヤー">
+      <div id="player-stage" class="player-stage">
         <div class="record-shadow" aria-hidden="true"></div>
         <div class="record" id="record" role="slider" tabindex="0" aria-label="レコードを回す" aria-valuemin="0"
           aria-valuemax="360" aria-valuenow="0">
@@ -52,7 +50,6 @@
             <strong>001</strong>
             <span class="label-small">STEREO</span>
           </div>
-          <div class="spindle"></div>
         </div>
         <div class="drag-hint" id="dragHint"><span>↻</span> DRAG THE VINYL</div>
         <p class="deck-caption">SIDE A <span>/</span> <strong class="session-label">001</strong></p>
@@ -65,10 +62,9 @@
       </div>
     </section>
 
-    <section class="picker-panel" id="pickerPanel" aria-label="レコードを変更" hidden>
+    <section id="picker-panel" class="picker-panel" id="pickerPanel" aria-label="レコードを変更" hidden>
       <div class="picker-heading">
         <div>
-          <p class="eyebrow">THE VINYL ARCHIVE</p>
           <h2>Choose<br />your record.</h2>
         </div>
         <button class="close-button" id="closePickerButton" type="button">BACK TO PLAYER</button>
@@ -82,9 +78,8 @@
         <p class="picker-instruction">DRAG TO BROWSE →</p>
       </div>
     </section>
-
   </main>
-  <script src="js/record-player.js?260920_4"></script>
+  <script src="js/record-player.js?260920_5"></script>
   <script src="js/record-picker.js?260920_4"></script>
 </body>
 

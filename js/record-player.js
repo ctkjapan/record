@@ -24,6 +24,7 @@ let audioBuffer;
 let reversedAudioBuffer;
 let audioLoadPromise;
 let audioLoadRequestId = 0;
+let audioLoadController;
 const audioBufferCache = new Map();
 let audioSource;
 let audioSourceStartedAt = 0;
@@ -32,8 +33,11 @@ let audioSourceRate = 1;
 let audioTimeFrame;
 let audioUnlocked = false;
 let isAudioLoading = false;
+let audioLoadProgress = 0;
 let lastAudioTimeLabel = '';
 let lastPlaybackRateLabel = '';
+let lastPlayStateLabel = '';
+let lastAudioBusyState = null;
 
 const ATTENUATION_RATE = 1;
 const MIN_PLAYBACK_RATE = 0;
@@ -73,8 +77,54 @@ function updatePlaybackRateLabel() {
 }
 
 function updatePlayState() {
-    playState.textContent = isAudioLoading ? 'LOADING AUDIO' : isAudioPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
-    record.setAttribute('aria-busy', String(isAudioLoading));
+    const nextLabel = isAudioLoading ? `LOADING AUDIO ${audioLoadProgress}%` : isAudioPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
+    if (nextLabel !== lastPlayStateLabel) {
+        playState.textContent = nextLabel;
+        lastPlayStateLabel = nextLabel;
+    }
+    const nextBusyState = String(isAudioLoading);
+    if (nextBusyState !== lastAudioBusyState) {
+        record.setAttribute('aria-busy', nextBusyState);
+        lastAudioBusyState = nextBusyState;
+    }
+}
+
+function updateAudioLoadProgress(progress) {
+    const nextProgress = Math.max(0, Math.min(99, Math.floor(progress)));
+    if (nextProgress === audioLoadProgress) return;
+    audioLoadProgress = nextProgress;
+    updatePlayState();
+}
+
+async function readAudioResponse(response) {
+    const totalBytes = Number(response.headers.get('content-length'));
+    if (!response.body || !Number.isFinite(totalBytes) || totalBytes <= 0) {
+        const data = await response.arrayBuffer();
+        updateAudioLoadProgress(99);
+        return data;
+    }
+
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loadedBytes = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        chunks.push(value);
+        loadedBytes += value.byteLength;
+        updateAudioLoadProgress((loadedBytes / totalBytes) * 100);
+    }
+
+    updateAudioLoadProgress(99);
+    const data = new Uint8Array(loadedBytes);
+    let offset = 0;
+    chunks.forEach((chunk) => {
+        data.set(chunk, offset);
+        offset += chunk.byteLength;
+    });
+    return data.buffer;
 }
 
 function syncLogicalAudioTime() {
@@ -124,10 +174,12 @@ function loadAudioBuffer() {
         updateAudioTime();
         return Promise.resolve(audioBuffer);
     }
-    audioLoadPromise = fetch(sourceUrl)
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    audioLoadController = controller;
+    audioLoadPromise = fetch(sourceUrl, controller ? { signal: controller.signal } : undefined)
         .then((response) => {
             if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
-            return response.arrayBuffer();
+            return readAudioResponse(response);
         })
         .then((data) => context.decodeAudioData(data))
         .then((buffer) => {
@@ -142,10 +194,20 @@ function loadAudioBuffer() {
                 }
             }
             audioBufferCache.set(sourceUrl, { forward: buffer, reverse: reversedAudioBuffer });
+            audioLoadProgress = 100;
+            updatePlayState();
             updateAudioTime();
             return audioBuffer;
         });
     const currentLoadPromise = audioLoadPromise;
+    currentLoadPromise.then(
+        () => {
+            if (audioLoadController === controller) audioLoadController = null;
+        },
+        () => {
+            if (audioLoadController === controller) audioLoadController = null;
+        },
+    );
     currentLoadPromise.catch(() => {
         if (audioLoadPromise === currentLoadPromise) audioLoadPromise = null;
     });
@@ -158,6 +220,10 @@ function setAudioSource(sourceUrl) {
         return audioLoadPromise || Promise.resolve(audioBuffer);
     }
     if (audioSource) stopAudioSource();
+    if (audioLoadController) {
+        audioLoadController.abort();
+        audioLoadController = null;
+    }
     audioSourceUrl = nextSourceUrl;
     audioLoadRequestId += 1;
     audioLoadPromise = null;
@@ -165,6 +231,7 @@ function setAudioSource(sourceUrl) {
     reversedAudioBuffer = null;
     logicalAudioTime = 0;
     updateAudioTime();
+    audioLoadProgress = 0;
     isAudioLoading = true;
     pageBody.classList.add('is-loading');
     updatePlayState();
@@ -179,12 +246,13 @@ function setAudioSource(sourceUrl) {
             return buffer;
         },
         (error) => {
-            if (nextSourceUrl === audioSourceUrl) {
-                isAudioLoading = false;
-                pageBody.classList.remove('is-loading');
-                playState.textContent = 'AUDIO LOAD ERROR';
-                record.setAttribute('aria-busy', 'false');
-            }
+            if (nextSourceUrl !== audioSourceUrl) return null;
+            isAudioLoading = false;
+            pageBody.classList.remove('is-loading');
+            playState.textContent = 'AUDIO LOAD ERROR';
+            lastPlayStateLabel = 'AUDIO LOAD ERROR';
+            record.setAttribute('aria-busy', 'false');
+            lastAudioBusyState = 'false';
             throw error;
         },
     );
