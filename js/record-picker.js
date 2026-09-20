@@ -13,12 +13,16 @@ const sessionLabel = document.querySelector('.session-label');
 const pickerPageBody = document.body;
 
 const records = [
-    { id: '001', title: 'P4D / Dance!', color: '#b4d34b', audioUrl: 'mp3/1-01%20Dance!.mp3' },
-    { id: '002', title: 'P5 / Life Will Change', color: '#ed6a4e', audioUrl: 'mp3/04%20Life%20Will%20Change.mp3' },
-    { id: '003', title: 'SEKAI NO OWARI / 虹色の戦争', color: '#d8c46a', audioUrl: 'mp3/虹色の戦争.mp3' },
-    { id: '004', title: 'Mrs. GREEN APPLE / 青と夏', color: '#91b9b0', audioUrl: 'mp3/mga_2.mp3' },
+    { id: '001', title: 'P4D / Dance!', color: '#f3ec05', audioUrl: 'mp3/Dance!.mp3' },
+    { id: '002', title: 'P5 / Life Will Change', color: '#e12230', audioUrl: 'mp3/Life Will Change.mp3' },
+    { id: '003', title: 'SEKAI NO OWARI / 虹色の戦争', color: '#54c9c5', audioUrl: 'mp3/虹色の戦争.mp3' },
+    { id: '004', title: 'Mrs. GREEN APPLE / 青と夏', color: '#02599e', audioUrl: 'mp3/mga_2.mp3' },
+    { id: '005', title: 'Earth, Wind & Fire / September', color: '#eaa734', audioUrl: 'mp3/Earth, Wind & Fire - September.mp3' },
+    { id: '007', title: 'Ken Ishii / Extra', color: '#c9c94d', audioUrl: 'mp3/Ken Ishii - Extra.mp3' },
+    { id: '008', title: 'Creepy Nuts / Bling-Bang-Bang-Born', color: '#c90665', audioUrl: 'mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3' },
+    { id: '009', title: 'Metaphor: ReFantazio / 英雄譚序曲', color: '#eeeeee', audioUrl: 'mp3/英雄譚序曲.mp3' },
+    { id: '010', title: 'Official髭男dism / Pretender', color: '#b97959', audioUrl: 'mp3/Official髭男dism - Pretender.mp3' },
 ];
-
 let focusedRecordIndex = 0;
 let selectedRecordIndex = 0;
 let pickerPointerId = null;

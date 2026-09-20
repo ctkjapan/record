@@ -216,7 +216,7 @@ body {
         min-height: calc(100svh - 200px);
         margin-left: auto;
         overflow: hidden;
-        background: rgb(0, 0, 0, .4);
+        background: rgb(0, 0, 0, .3);
         border-radius: 0 0 0 min(20vw, 240px);
         isolation: isolate;
 
@@ -736,7 +736,7 @@ body {
         padding-top: 80px;
 
         .player-stage {
-          width: calc(100% - 20px);
+          width: calc(100% - 4px);
           border-radius: 110px 0 0 0;
 
           .record,

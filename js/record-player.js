@@ -112,6 +112,19 @@ function updateAudioLoadProgress(progress) {
     updatePlayState();
 }
 
+function isAudioPlayable() {
+    return Boolean(audioContext && audioContext.state !== 'closed' && audioBuffer && reversedAudioBuffer && getAudioDuration() > 0);
+}
+
+function completeAudioLoading() {
+    if (!isAudioPlayable()) return false;
+    audioLoadProgress = 100;
+    isAudioLoading = false;
+    pageBody.classList.remove('is-loading');
+    updatePlayState();
+    return true;
+}
+
 async function readAudioResponse(response) {
     const totalBytes = Number(response.headers.get('content-length'));
     if (!response.body || !Number.isFinite(totalBytes) || totalBytes <= 0) {
@@ -277,8 +290,6 @@ function loadAudioBuffer() {
                 }
             }
             audioBufferCache.set(sourceUrl, { forward: buffer, reverse: reversedAudioBuffer });
-            audioLoadProgress = 100;
-            updatePlayState();
             updateAudioTime();
             return audioBuffer;
         });
@@ -323,9 +334,7 @@ function setAudioSource(sourceUrl) {
     return nextLoadPromise.then(
         (buffer) => {
             if (nextSourceUrl === audioSourceUrl) {
-                isAudioLoading = false;
-                pageBody.classList.remove('is-loading');
-                updatePlayState();
+                completeAudioLoading();
             }
             return buffer;
         },
@@ -422,6 +431,7 @@ function startAudioSource() {
     audioSourceStartTime = logicalAudioTime;
     const offset = audioDirection === 'reverse' ? duration - logicalAudioTime : logicalAudioTime;
     source.start(0, Math.min(duration, Math.max(0, offset)));
+    completeAudioLoading();
     audioTimeFrame = requestAnimationFrame(updateAudioTimeLoop);
     visualizerFrame = requestAnimationFrame(updateVisualizer);
 }
