@@ -421,7 +421,7 @@ body {
       .speed-readout {
         position: absolute;
         right: 20px;
-        top: -90px;
+        top: -40px;
         color: var(--white);
         opacity: .8;
       }
@@ -429,7 +429,7 @@ body {
       .meter {
         position: absolute;
         left: 40px;
-        top: -100px;
+        top: -20px;
 
         width: calc(100% - 60px);
         height: 2px;
