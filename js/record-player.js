@@ -1,6 +1,4 @@
 const record = document.querySelector('#record');
-const resetButton = document.querySelector('#resetButton');
-const dragHint = document.querySelector('#dragHint');
 const playState = document.querySelector('#playState');
 const audioTime = document.querySelector('#audioTime');
 const audioSeek = document.querySelector('#audioSeek');
@@ -51,6 +49,9 @@ const MIN_PLAYBACK_RATE = 0;
 const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_SMOOTHING = 0.1;
 const ROTATION_SPEED_SCALE = 8;
+const DOWNLOAD_PROGRESS_MAX = 80;
+const DECODE_PROGRESS = 85;
+const REVERSE_BUFFER_PROGRESS_START = 92;
 const MIN_CENTER = 45;
 const MAX_CENTER = 55;
 const DEFAULT_AUDIO_SOURCE_URL = 'mp3/1-01%20Dance!.mp3';
@@ -129,7 +130,7 @@ async function readAudioResponse(response) {
     const totalBytes = Number(response.headers.get('content-length'));
     if (!response.body || !Number.isFinite(totalBytes) || totalBytes <= 0) {
         const data = await response.arrayBuffer();
-        updateAudioLoadProgress(99);
+        updateAudioLoadProgress(DOWNLOAD_PROGRESS_MAX);
         return data;
     }
 
@@ -143,10 +144,10 @@ async function readAudioResponse(response) {
         if (!value) continue;
         chunks.push(value);
         loadedBytes += value.byteLength;
-        updateAudioLoadProgress((loadedBytes / totalBytes) * 100);
+        updateAudioLoadProgress((loadedBytes / totalBytes) * DOWNLOAD_PROGRESS_MAX);
     }
 
-    updateAudioLoadProgress(99);
+    updateAudioLoadProgress(DOWNLOAD_PROGRESS_MAX);
     const data = new Uint8Array(loadedBytes);
     let offset = 0;
     chunks.forEach((chunk) => {
@@ -277,7 +278,10 @@ function loadAudioBuffer() {
             if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
             return readAudioResponse(response);
         })
-        .then((data) => context.decodeAudioData(data))
+        .then((data) => {
+            updateAudioLoadProgress(DECODE_PROGRESS);
+            return context.decodeAudioData(data);
+        })
         .then((buffer) => {
             if (requestId !== audioLoadRequestId || sourceUrl !== audioSourceUrl) return null;
             audioBuffer = buffer;
@@ -288,7 +292,9 @@ function loadAudioBuffer() {
                 for (let index = 0; index < sourceChannel.length; index += 1) {
                     reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
                 }
+                updateAudioLoadProgress(REVERSE_BUFFER_PROGRESS_START + ((channel + 1) / buffer.numberOfChannels) * (99 - REVERSE_BUFFER_PROGRESS_START));
             }
+            updateAudioLoadProgress(99);
             audioBufferCache.set(sourceUrl, { forward: buffer, reverse: reversedAudioBuffer });
             updateAudioTime();
             return audioBuffer;
@@ -507,7 +513,6 @@ function updatePlaying(isPlaying) {
     pageBody.classList.toggle('is-playing', isPlaying);
     updatePlayState();
     if (isPlaying) {
-        dragHint.classList.add('is-hidden');
         if (getAudioDuration() > 0 && logicalAudioTime >= getAudioDuration()) logicalAudioTime = 0;
         prepareAudio();
     } else {
@@ -583,17 +588,6 @@ record.addEventListener('keydown', (event) => {
     updatePlaying(true);
     cancelAnimationFrame(momentumFrame);
     momentumFrame = requestAnimationFrame(applyMomentum);
-});
-
-resetButton.addEventListener('click', () => {
-    stopMomentum();
-    isSeeking = false;
-    rotation = 0;
-    record.style.transform = 'rotate(0deg)';
-    angleValue.textContent = '000°';
-    record.setAttribute('aria-valuenow', '0');
-    updatePlaying(false);
-    dragHint.classList.remove('is-hidden');
 });
 
 audioSeek.addEventListener('input', updateSeekPreview);

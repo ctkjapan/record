@@ -11,7 +11,6 @@ const albumNumber = document.querySelector('#albumNumber');
 const albumArtist = document.querySelector('#albumArtist');
 const albumTitle = document.querySelector('#albumTitle');
 const labelNumber = document.querySelector('.label strong');
-const sessionLabel = document.querySelector('.session-label');
 const pickerPageBody = document.body;
 
 const records = [
@@ -73,7 +72,6 @@ function selectRecord(index) {
     const [artist, title] = nextRecord.title.split(' / ');
     labelNumber.textContent = nextRecord.id;
     document.documentElement.style.setProperty('--accent', nextRecord.color);
-    sessionLabel.textContent = nextRecord.id;
     albumNumber.textContent = String(index + 1).padStart(2, '0');
     albumArtist.textContent = artist;
     albumTitle.textContent = title;
