@@ -162,7 +162,6 @@ body {
         }
 
         & em {
-          max-width: 6ch;
           margin-left: .82em;
           color: var(--white);
           font-style: normal;
