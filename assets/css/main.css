@@ -13,7 +13,7 @@
   --coral: #e27565;
   --ink: #24213e;
   --paper-line: rgba(36, 33, 62, .22);
-  --accent: #aaa;
+  --accent: #aaaaaa;
 }
 
 html {}
@@ -167,7 +167,7 @@ body {
 
         h1 {
           margin: 0;
-          font-size: 3rem;
+          font-size: min(3rem, 6dvh);
           font-weight: 500;
           line-height: .82;
           letter-spacing: -.065em;
@@ -219,7 +219,7 @@ body {
 
           .record-shadow {
             position: absolute;
-            width: min(90vw, 400px);
+            width: min(80vw, 400px);
             aspect-ratio: 1;
             border-radius: 50%;
             background: #100f23;
@@ -242,7 +242,7 @@ body {
           .record {
             position: relative;
             z-index: 2;
-            width: min(90vw, 400px);
+            width: min(80vw, 400px);
             aspect-ratio: 1;
             border: 1px solid #0b0b12;
             border-radius: 50%;
@@ -271,16 +271,17 @@ body {
               inset: 11%;
               border: 1px solid rgba(255, 255, 255, .085);
               border-radius: 50%;
-              opacity: 0;
               transition: opacity 8s;
 
               &.grooves-one {
                 background: var(--accent);
+                opacity: 0;
               }
 
               &.grooves-two {
                 inset: 21%;
                 background: var(--accent);
+                opacity: 0;
               }
             }
 
@@ -347,6 +348,7 @@ body {
           align-items: center;
           gap: 12px;
           margin: 0;
+          pointer-events: none;
 
           & strong {
             font-size: .9rem;
@@ -411,6 +413,7 @@ body {
           font-size: 10px;
           color: var(--white);
           letter-spacing: .12em;
+          pointer-events: none;
 
           .status-dot {
             width: 10px;
@@ -427,12 +430,17 @@ body {
       .picker-panel {
         position: relative;
         z-index: 10;
-        min-height: 100svh;
-        padding-top: 10px;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        justify-content: center;
+        min-height: calc(100svh - 60px);
         color: var(--white);
         background: var(--violet);
 
         .picker-heading {
+          position: absolute;
+          top: 10px;
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
@@ -650,7 +658,7 @@ body {
   }
 
   &.is-loading {
-    --accent: #aaa;
+    --accent: #aaaaaa;
 
     main.app-shell {
       #PagePlayer {
@@ -659,7 +667,7 @@ body {
             .record {
               .grooves {
                 &.grooves-one {
-                  opacity: .0;
+                  opacity: 0;
                 }
 
                 &.grooves-two {
@@ -684,6 +692,10 @@ body {
 
   &.picker-open {
     background: var(--violet);
+
+    .change-button {
+      display: none;
+    }
 
     header.top-bar {
       color: var(--white);

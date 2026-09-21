@@ -7,7 +7,7 @@
 - レコードのドラッグ操作・キーボード操作
 - 回転速度に連動した再生速度の変更
 - 慣性回転と正転・逆転再生
-- 4種類のレコード選択
+- `assets/data/records.json`に定義したレコード選択
 - 音声ロード進捗の表示
 - 音声ロード中のレコードのモノクロ表示
 - レスポンシブ表示と基本的なキーボードアクセシビリティ
@@ -38,10 +38,15 @@ python3 -m http.server 8000
 | パス | 役割 |
 | --- | --- |
 | `index.html` | ページ構造、操作対象、ARIA属性 |
-| `js/record-player.js` | 回転、慣性、再生、音声ロード、進捗表示 |
-| `js/record-picker.js` | レコード一覧、選択画面、表示情報の更新 |
-| `styles.css` | レイアウト、配色、レコード表現、レスポンシブ表示 |
-| `mp3/` | 再生する音声ファイル |
+| `assets/js/main.js` | DDD各層の依存関係を構成して初期化 |
+| `assets/js/record-player.js` | 回転、慣性、シーク、プレーヤー表示 |
+| `assets/js/record-picker.js` | レコード選択画面、表示情報の更新 |
+| `assets/js/domain/` | レコードと一覧のドメインモデル |
+| `assets/js/application/` | レコード一覧のユースケース |
+| `assets/js/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
+| `assets/data/records.json` | レコード定義と音声URL |
+| `assets/css/main.css` | レイアウト、配色、レコード表現、レスポンシブ表示 |
+| `assets/mp3/` | 再生する音声ファイル |
 | `docs/` | 機能別の仕様書 |
 
 ## 音声再生
@@ -51,8 +56,10 @@ Web Audio APIを使用します。音声は`fetch`と`decodeAudioData`で読み�
 ## 確認方法
 
 ```sh
-node --check js/record-player.js
-node --check js/record-picker.js
+node --check assets/js/main.js
+node --check assets/js/record-player.js
+node --check assets/js/record-picker.js
+node --check assets/js/infrastructure/web-audio-engine.js
 git diff --check
 ```
 
