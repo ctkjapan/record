@@ -6,7 +6,7 @@ const REVERSE_BUFFER_PROGRESS_START = 92;
 
 /** Web Audio APIを隠蔽し、音声の取得・デコード・再生状態を管理するインフラ実装。 */
 export class WebAudioEngine {
-    constructor() {
+    constructor({ noiseSourceUrl = null, noiseEnabled = false } = {}) {
         // AudioContextと音声バッファのライフサイクルを管理する状態。
         this.audioContext = null;
         this.audioBuffer = null;
@@ -17,6 +17,13 @@ export class WebAudioEngine {
         this.audioLoadRequestId = 0;
         this.audioLoadController = null;
         this.audioBufferCache = new Map();
+        // メイン音源と同期してループするノイズ音源の状態。
+        this.noiseSourceUrl = noiseSourceUrl;
+        this.noiseAudioBuffer = null;
+        this.reversedNoiseAudioBuffer = null;
+        this.noiseLoadPromise = null;
+        this.noiseSource = null;
+        this.noiseEnabled = Boolean(noiseEnabled);
         // 解析用ノードと可視化データ。
         this.audioAnalyser = null;
         this.visualizerData = null;
@@ -58,6 +65,11 @@ export class WebAudioEngine {
         return Boolean(this.audioSourceUrl);
     }
 
+    /** ノイズ音声の同期再生が有効かを返す。 */
+    get isNoiseEnabled() {
+        return this.noiseEnabled;
+    }
+
     /** 再生中の経過時間を論理秒数へ同期して返す。 */
     getCurrentSeconds() {
         this.syncCurrentSeconds();
@@ -77,8 +89,11 @@ export class WebAudioEngine {
         const requestedSeconds = this.normalizeSeconds(initialSeconds);
         if (sourceUrl === this.audioSourceUrl && (this.audioBuffer || this.audioLoadPromise)) {
             this.logicalSeconds = requestedSeconds;
-            const currentLoadPromise = this.audioLoadPromise || Promise.resolve(this.audioBuffer);
-            const buffer = await currentLoadPromise;
+            const currentLoadPromise = Promise.all([
+                this.audioLoadPromise || Promise.resolve(this.audioBuffer),
+                this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
+            ]);
+            const [buffer] = await currentLoadPromise;
             this.logicalSeconds = this.clampSeconds(requestedSeconds);
             return buffer;
         }
@@ -93,9 +108,12 @@ export class WebAudioEngine {
         this.logicalSeconds = requestedSeconds;
         this.setLoading(true, MIN_LOAD_PROGRESS);
 
-        const nextLoadPromise = this.loadAudioBuffer();
+        const nextLoadPromise = Promise.all([
+            this.loadAudioBuffer(),
+            this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
+        ]);
         try {
-            const buffer = await nextLoadPromise;
+            const [buffer] = await nextLoadPromise;
             if (sourceUrl === this.audioSourceUrl) {
                 this.logicalSeconds = this.clampSeconds(requestedSeconds);
                 this.completeLoading();
@@ -114,7 +132,11 @@ export class WebAudioEngine {
         if (!this.hasSource) return;
         this.isPlaying = true;
         try {
-            await Promise.all([this.unlock(), this.loadAudioBuffer()]);
+            await Promise.all([
+                this.unlock(),
+                this.loadAudioBuffer(),
+                this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
+            ]);
             if (this.isPlaying) this.startSource();
         } catch (error) {
             this.isPlaying = false;
@@ -126,6 +148,32 @@ export class WebAudioEngine {
     stop() {
         this.isPlaying = false;
         this.stopSource();
+    }
+
+    /** ノイズ音声の同期再生を切り替え、再生中なら現在位置から再構成する。 */
+    async setNoiseEnabled(enabled) {
+        const nextEnabled = Boolean(enabled);
+        if (nextEnabled === this.noiseEnabled) return;
+        this.noiseEnabled = nextEnabled;
+        if (!this.isPlaying) return;
+
+        if (!nextEnabled) {
+            this.syncCurrentSeconds();
+            this.stopSource(false);
+            this.startSource();
+            return;
+        }
+
+        try {
+            await this.loadNoiseAudioBuffer();
+        } catch (error) {
+            this.noiseEnabled = false;
+            throw error;
+        }
+        if (!this.noiseEnabled || !this.isPlaying) return;
+        this.syncCurrentSeconds();
+        this.stopSource(false);
+        this.startSource();
     }
 
     /** 正転／逆転を切り替え、再生中なら新しい方向で再接続する。 */
@@ -144,6 +192,7 @@ export class WebAudioEngine {
         this.audioSourceStartTime = this.logicalSeconds;
         this.audioSourceStartedAt = this.audioContext.currentTime;
         this.audioSource.playbackRate.value = rate;
+        if (this.noiseSource) this.noiseSource.playbackRate.value = rate;
     }
 
     /** 指定秒数へシークし、再生中ならその位置から再開する。 */
@@ -217,12 +266,48 @@ export class WebAudioEngine {
         return this.audioLoadPromise;
     }
 
-    /** Responseのストリームを読み込み、ダウンロード進捗を通知する。 */
-    async readAudioResponse(response) {
+    /** ノイズ音源を取得して、正転用・逆転用のAudioBufferを生成する。 */
+    async loadNoiseAudioBuffer() {
+        if (!this.noiseSourceUrl) return null;
+        if (this.noiseAudioBuffer) return this.noiseAudioBuffer;
+        if (this.noiseLoadPromise) return this.noiseLoadPromise;
+        const context = this.initializeAudioContext();
+        this.noiseLoadPromise = fetch(this.noiseSourceUrl)
+            .then((response) => {
+                if (!response.ok) throw new Error(`ノイズ音声の読み込みに失敗しました: ${response.status}`);
+                return this.readAudioResponse(response, () => {});
+            })
+            .then((data) => context.decodeAudioData(data))
+            .then((buffer) => {
+                this.noiseAudioBuffer = buffer;
+                this.reversedNoiseAudioBuffer = this.createReversedBuffer(context, buffer);
+                return buffer;
+            });
+        this.noiseLoadPromise.catch(() => {
+            this.noiseLoadPromise = null;
+        });
+        return this.noiseLoadPromise;
+    }
+
+    /** 音声バッファを反転し、逆再生用バッファを作成する。 */
+    createReversedBuffer(context, buffer) {
+        const reversedBuffer = context.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+        for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+            const sourceChannel = buffer.getChannelData(channel);
+            const reversedChannel = reversedBuffer.getChannelData(channel);
+            for (let index = 0; index < sourceChannel.length; index += 1) {
+                reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
+            }
+        }
+        return reversedBuffer;
+    }
+
+    /** Responseのストリームを読み込み、必要な場合だけ進捗を通知する。 */
+    async readAudioResponse(response, onProgress = (progress) => this.updateLoadProgress(progress)) {
         const totalBytes = Number(response.headers.get('content-length'));
         if (!response.body || !Number.isFinite(totalBytes) || totalBytes <= 0) {
             const data = await response.arrayBuffer();
-            this.updateLoadProgress(DOWNLOAD_PROGRESS_MAX);
+            onProgress(DOWNLOAD_PROGRESS_MAX);
             return data;
         }
 
@@ -235,9 +320,9 @@ export class WebAudioEngine {
             if (!value) continue;
             chunks.push(value);
             loadedBytes += value.byteLength;
-            this.updateLoadProgress((loadedBytes / totalBytes) * DOWNLOAD_PROGRESS_MAX);
+            onProgress((loadedBytes / totalBytes) * DOWNLOAD_PROGRESS_MAX);
         }
-        this.updateLoadProgress(DOWNLOAD_PROGRESS_MAX);
+        onProgress(DOWNLOAD_PROGRESS_MAX);
         const data = new Uint8Array(loadedBytes);
         let offset = 0;
         chunks.forEach((chunk) => {
@@ -302,13 +387,39 @@ export class WebAudioEngine {
         source.loopStart = 0;
         source.loopEnd = duration;
         source.playbackRate.value = this.audioSourceRate;
-        source.connect(this.initializeAudioAnalyser(this.audioContext) || this.audioContext.destination);
+        const outputNode = this.initializeAudioAnalyser(this.audioContext) || this.audioContext.destination;
+        source.connect(outputNode);
+        const noiseSource = this.createNoiseSource(outputNode);
         this.audioSource = source;
+        this.noiseSource = noiseSource;
         this.audioSourceStartedAt = this.audioContext.currentTime;
         this.audioSourceStartTime = this.logicalSeconds;
         const offset = this.direction === 'reverse' ? duration - this.logicalSeconds : this.logicalSeconds;
         source.start(0, Math.min(duration, Math.max(0, offset)));
+        if (noiseSource) noiseSource.start(0, this.getNoiseOffset());
         this.completeLoading();
+    }
+
+    /** メイン音源の秒数に対応するノイズ再生ノードを生成する。 */
+    createNoiseSource(outputNode) {
+        if (!this.noiseEnabled || !this.noiseAudioBuffer || !this.reversedNoiseAudioBuffer) return null;
+        const noiseSource = this.audioContext.createBufferSource();
+        noiseSource.buffer = this.direction === 'reverse' ? this.reversedNoiseAudioBuffer : this.noiseAudioBuffer;
+        noiseSource.loop = true;
+        noiseSource.loopStart = 0;
+        noiseSource.loopEnd = this.noiseAudioBuffer.duration;
+        noiseSource.playbackRate.value = this.audioSourceRate;
+        noiseSource.connect(outputNode);
+        return noiseSource;
+    }
+
+    /** メイン音源の秒数をノイズ音源のループ位置へ変換する。 */
+    getNoiseOffset() {
+        const duration = this.noiseAudioBuffer?.duration || 0;
+        if (duration <= 0) return 0;
+        const normalizedSeconds = ((this.logicalSeconds % duration) + duration) % duration;
+        if (this.direction !== 'reverse' || normalizedSeconds === 0) return normalizedSeconds;
+        return duration - normalizedSeconds;
     }
 
     /** 現在のAudioBufferSourceNodeを停止し、必要に応じて位置を同期する。 */
@@ -323,6 +434,15 @@ export class WebAudioEngine {
             // 再生終了済みのソースは停止処理を不要とする。
         }
         source.disconnect();
+        if (this.noiseSource) {
+            try {
+                this.noiseSource.stop();
+            } catch {
+                // 再生終了済みのノイズソースは停止処理を不要とする。
+            }
+            this.noiseSource.disconnect();
+            this.noiseSource = null;
+        }
     }
 
     /** AudioContextの経過時間から音声ファイル上の秒数を計算する。 */

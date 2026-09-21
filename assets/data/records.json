@@ -3,54 +3,54 @@
     "id": "001",
     "title": "P4D / Dance!",
     "color": "#f3ec05",
-    "audioUrl": "/assets/mp3/Dance!.mp3"
+    "audioUrl": "assets/mp3/Dance!.mp3"
   },
   {
     "id": "002",
     "title": "P5 / Life Will Change",
     "color": "#e12230",
-    "audioUrl": "/assets/mp3/Life Will Change.mp3"
+    "audioUrl": "assets/mp3/Life Will Change.mp3"
   },
   {
     "id": "003",
     "title": "SEKAI NO OWARI / 虹色の戦争",
     "color": "#54c9c5",
-    "audioUrl": "/assets/mp3/虹色の戦争.mp3"
+    "audioUrl": "assets/mp3/虹色の戦争.mp3"
   },
   {
     "id": "004",
     "title": "Mrs. GREEN APPLE / 青と夏",
     "color": "#02599e",
-    "audioUrl": "/assets/mp3/mga_2.mp3"
+    "audioUrl": "assets/mp3/mga_2.mp3"
   },
   {
     "id": "005",
     "title": "Earth, Wind & Fire / September",
     "color": "#eaa734",
-    "audioUrl": "/assets/mp3/Earth, Wind & Fire - September.mp3"
+    "audioUrl": "assets/mp3/Earth, Wind & Fire - September.mp3"
   },
   {
     "id": "006",
     "title": "Ken Ishii / Extra",
     "color": "#c9c94d",
-    "audioUrl": "/assets/mp3/Ken Ishii - Extra.mp3"
+    "audioUrl": "assets/mp3/Ken Ishii - Extra.mp3"
   },
   {
     "id": "007",
     "title": "Creepy Nuts / Bling-Bang-Bang-Born",
     "color": "#c90665",
-    "audioUrl": "/assets/mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3"
+    "audioUrl": "assets/mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3"
   },
   {
     "id": "008",
     "title": "Metaphor: ReFantazio / 英雄譚序曲",
     "color": "#eeeeee",
-    "audioUrl": "/assets/mp3/英雄譚序曲.mp3"
+    "audioUrl": "assets/mp3/英雄譚序曲.mp3"
   },
   {
     "id": "009",
     "title": "Official髭男dism / Pretender",
     "color": "#b97959",
-    "audioUrl": "/assets/mp3/Official髭男dism - Pretender.mp3"
+    "audioUrl": "assets/mp3/Official髭男dism - Pretender.mp3"
   }
 ]

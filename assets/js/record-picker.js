@@ -18,7 +18,8 @@ export class RecordPickerController {
         this.albumNumber = document.querySelector('#albumNumber');
         this.albumArtist = document.querySelector('#albumArtist');
         this.albumTitle = document.querySelector('#albumTitle');
-        this.labelNumber = document.querySelector('#labelNumber');
+        // 旧HTMLのclass指定と現行HTMLのid指定のどちらでもラベルを取得する。
+        this.labelNumber = document.querySelector('#labelNumber, .labelNumber');
         this.pageBody = document.body;
         // レコード一覧と現在のフォーカス／選択状態。
         this.catalog = null;

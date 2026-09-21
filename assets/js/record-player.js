@@ -15,6 +15,7 @@ export class RecordPlayerController {
         this.playbackStateRepository = playbackStateRepository;
         // プレーヤー画面のDOM要素。
         this.record = document.querySelector('#record');
+        this.noiseButton = document.querySelector('#noiseButton');
         this.playState = document.querySelector('#playState');
         this.audioTime = document.querySelector('#audioTime');
         this.audioSeek = document.querySelector('#audioSeek');
@@ -57,6 +58,9 @@ export class RecordPlayerController {
     /** DOMイベントとページ離脱時の保存処理を初期化する。 */
     initialize() {
         this.bindEvents();
+        const { noiseEnabled } = this.playbackStateRepository.load();
+        this.audioEngine.setNoiseEnabled(noiseEnabled).catch(() => {});
+        this.updateNoiseButton(noiseEnabled);
         window.addEventListener('pagehide', () => this.persistPlaybackSeconds(true));
         this.setRotation(0);
         this.updateAudioTime();
@@ -87,11 +91,32 @@ export class RecordPlayerController {
         this.record.addEventListener('pointerup', (event) => this.releasePointer(event));
         this.record.addEventListener('pointercancel', (event) => this.releasePointer(event));
         this.record.addEventListener('keydown', (event) => this.handleKeyDown(event));
+        this.noiseButton?.addEventListener('click', () => this.toggleNoise());
         this.audioSeek.addEventListener('input', () => this.updateSeekPreview());
         this.audioSeek.addEventListener('change', () => this.commitSeek());
         this.audioSeek.addEventListener('keyup', (event) => {
             if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) this.commitSeek();
         });
+    }
+
+    /** noiseボタンの状態を音声エンジンへ反映する。 */
+    toggleNoise() {
+        const nextEnabled = !this.audioEngine.isNoiseEnabled;
+        this.audioEngine
+            .setNoiseEnabled(nextEnabled)
+            .then(() => {
+                this.playbackStateRepository.saveNoiseEnabled(this.audioEngine.isNoiseEnabled);
+                this.updateNoiseButton();
+            })
+            .catch(() => this.updateNoiseButton());
+        this.updateNoiseButton(nextEnabled);
+    }
+
+    /** noiseボタンのaria状態と表示状態を更新する。 */
+    updateNoiseButton(enabled = this.audioEngine.isNoiseEnabled) {
+        if (!this.noiseButton) return;
+        this.noiseButton.setAttribute('aria-pressed', String(enabled));
+        this.noiseButton.classList.toggle('is-active', enabled);
     }
 
     /** 現在秒数と総時間を表示し、シークバーの範囲を更新する。 */

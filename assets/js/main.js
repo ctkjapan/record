@@ -4,18 +4,67 @@ import { RecordJsonRepository } from './infrastructure/record-json-repository.js
 import { WebAudioEngine } from './infrastructure/web-audio-engine.js';
 import { RecordPickerController } from './record-picker.js';
 import { RecordPlayerController } from './record-player.js';
+import { SplashController } from './splash-controller.js';
+
+// ブラウザの履歴スワイプと判定する画面端からの保護幅（px）。
+const EDGE_SWIPE_GUARD_PX = 32;
+
+/** プルダウン更新と左右端からの履歴スワイプを無効化する。 */
+function preventMobileBrowserGestures() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartedAtEdge = false;
+
+    // タッチ開始位置を記録し、横方向の選択操作と判定できるようにする。
+    document.addEventListener(
+        'touchstart',
+        (event) => {
+            if (event.touches.length !== 1) return;
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+            touchStartedAtEdge = touchStartX <= EDGE_SWIPE_GUARD_PX || touchStartX >= window.innerWidth - EDGE_SWIPE_GUARD_PX;
+        },
+        { passive: true },
+    );
+
+    // 最上部での下方向スワイプだけをキャンセルする。
+    document.addEventListener(
+        'touchmove',
+        (event) => {
+            if (event.touches.length !== 1) return;
+            const deltaX = event.touches[0].clientX - touchStartX;
+            const deltaY = event.touches[0].clientY - touchStartY;
+            const isBackSwipe = touchStartX <= EDGE_SWIPE_GUARD_PX && deltaX > 0;
+            const isForwardSwipe = touchStartX >= window.innerWidth - EDGE_SWIPE_GUARD_PX && deltaX < 0;
+            if (touchStartedAtEdge && Math.abs(deltaX) > Math.abs(deltaY) && (isBackSwipe || isForwardSwipe)) {
+                event.preventDefault();
+                return;
+            }
+            if (window.scrollY > 0) return;
+            if (deltaY > 0 && deltaY > Math.abs(deltaX)) event.preventDefault();
+        },
+        { passive: false },
+    );
+}
+
+preventMobileBrowserGestures();
 
 // レコード一覧JSONの公開URL。
-const RECORDS_LIST = '/assets/data/records.json';
+const RECORDS_LIST = '../data/records.json';
+// 全レコードに重ねて再生するノイズ音源。
+const RECORD_NOISE_SOURCE = 'assets/ogg/record_noise_loop.ogg';
 
 // cookieを介して選択レコードと再生秒数を永続化する実装。
 const playbackStateRepository = new PlaybackStateRepository();
 // 音声再生とプレーヤー画面を接続するController。
 const playerController = new RecordPlayerController({
-    audioEngine: new WebAudioEngine(),
+    audioEngine: new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false }),
     playbackStateRepository,
 });
 playerController.initialize();
+// 初回ユーザー操作で音声を有効化するスプラッシュController。
+const splashController = new SplashController({ audioEngine: playerController.audioEngine });
+splashController.initialize();
 window.RecordPlayer = Object.freeze({
     // 既存の外部呼び出し向けに、音源切り替えAPIだけを公開する。
     setAudioSource: (...args) => playerController.setAudioSource(...args),

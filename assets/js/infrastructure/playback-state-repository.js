@@ -2,14 +2,16 @@
 const RECORD_ID_COOKIE = 'groove-record-index';
 // 音声ファイル上の再生秒数を保存するcookie名。
 const PLAYBACK_SECONDS_COOKIE = 'groove-record-playback-seconds';
+// ノイズ音声の同期再生状態を保存するcookie名。
+const NOISE_ENABLED_COOKIE = 'groove-record-noise-enabled';
 // 旧バージョンの再生位置cookie。既存ユーザーの状態復元に使用する。
 const LEGACY_PLAYBACK_COOKIE = 'groove-record-playback-position';
 // cookieを保持する期間（1年）。
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-/** 選択状態と再生秒数をcookieへ保存・復元するリポジトリ。 */
+/** 選択状態、再生秒数、ノイズ同期状態をcookieへ保存・復元するリポジトリ。 */
 export class PlaybackStateRepository {
-    /** cookieからレコードIDと再生秒数を読み込み、異常値は初期値へ補正する。 */
+    /** cookieから再生状態を読み込み、異常値は初期値へ補正する。 */
     load() {
         const recordId = this.readCookie(RECORD_ID_COOKIE);
         const storedSeconds = this.readCookie(PLAYBACK_SECONDS_COOKIE) ?? this.readCookie(LEGACY_PLAYBACK_COOKIE);
@@ -17,6 +19,7 @@ export class PlaybackStateRepository {
         return {
             recordId,
             playbackSeconds: Number.isFinite(playbackSeconds) && playbackSeconds >= 0 ? playbackSeconds : 0,
+            noiseEnabled: this.readCookie(NOISE_ENABLED_COOKIE) === 'true',
         };
     }
 
@@ -28,6 +31,11 @@ export class PlaybackStateRepository {
     /** 音声ファイル上の再生秒数をcookieへ保存する。 */
     savePlaybackSeconds(seconds) {
         this.writeCookie(PLAYBACK_SECONDS_COOKIE, String(Math.max(0, Number(seconds) || 0)));
+    }
+
+    /** ノイズ音声の同期再生状態をcookieへ保存する。 */
+    saveNoiseEnabled(enabled) {
+        this.writeCookie(NOISE_ENABLED_COOKIE, String(Boolean(enabled)));
     }
 
     /** 指定名のcookie値を読み込む。 */

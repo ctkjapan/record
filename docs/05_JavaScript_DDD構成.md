@@ -13,12 +13,14 @@ assets/
 ├── data/records.json
 ├── js/
 │   ├── main.js
+│   ├── splash-controller.js
 │   ├── record-player.js
 │   ├── record-picker.js
 │   ├── domain/
 │   ├── application/
 │   └── infrastructure/
-└── mp3/
+├── mp3/
+└── ogg/record_noise_loop.ogg
 docs/
 ```
 
@@ -30,19 +32,32 @@ docs/
 | Application | `assets/js/application/record-catalog-service.js` | レコード一覧のユースケース |
 | Infrastructure | `assets/js/infrastructure/record-json-repository.js` | JSON取得 |
 | Infrastructure | `assets/js/infrastructure/playback-state-repository.js` | cookie保存・復元 |
-| Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生 |
+| Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期 |
+| Presentation | `assets/js/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | Presentation | `assets/js/record-player.js` | 回転操作、表示、シーク |
 | Presentation | `assets/js/record-picker.js` | 選択画面、カード操作、レコード情報表示 |
 | Composition Root | `assets/js/main.js` | 依存関係の生成と接続 |
 
 ## 依存方向
 
-画面制御はアプリケーションとインフラの実装を直接生成せず、`main.js`から注入します。`window.RecordPlayer`は既存の選択処理との互換Facadeとして`main.js`で公開します。
+画面制御はアプリケーションとインフラの実装を直接生成せず、`main.js`から注入します。`window.RecordPlayer`は既存の選択処理との互換Facadeとして`main.js`で公開します。ブラウザのタッチジェスチャー制御も`main.js`で初期化します。
 
 ## データの流れ
 
-1. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
-2. `RecordCatalogService`が`RecordCatalog`を生成する。
-3. `RecordPickerController`が選択レコードの`audioUrl`を`RecordPlayerController`へ渡す。
-4. `WebAudioEngine`が音声を取得・デコードし、再生する。
-5. 再生秒数と選択レコードIDを`PlaybackStateRepository`がcookieへ保存する。
+1. `main.js`がcookieリポジトリ、Web Audio、各Controllerを生成する。
+2. `SplashController`がスプラッシュを表示し、初回クリックでAudioContextをアンロックする。
+3. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
+4. `RecordCatalogService`が`RecordCatalog`を生成する。
+5. `RecordPickerController`が選択レコードの`audioUrl`を`RecordPlayerController`へ渡す。
+6. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
+7. `PlaybackStateRepository`がレコードID、再生秒数、ノイズ同期状態をcookieへ保存・復元する。
+
+## cookie
+
+| cookie | 内容 |
+| --- | --- |
+| `groove-record-index` | 選択レコードID |
+| `groove-record-playback-seconds` | 音声ファイル上の再生秒数 |
+| `groove-record-noise-enabled` | ノイズ同期のON/OFF |
+
+旧cookie`groove-record-playback-position`は再生秒数の読み込み時だけ互換対応します。

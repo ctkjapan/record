@@ -10,6 +10,9 @@
 - `assets/data/records.json`に定義したレコード選択
 - 音声ロード進捗の表示
 - 音声ロード中のレコードのモノクロ表示
+- 初回表示時のスプラッシュと音声再生許可
+- ノイズ音声の同期再生ON/OFFと状態のcookie保存
+- プルダウンリフレッシュと左右端の履歴スワイプの抑止
 - レスポンシブ表示と基本的なキーボードアクセシビリティ
 
 ## 起動方法
@@ -26,12 +29,13 @@ python3 -m http.server 8000
 
 | 操作 | 動作 |
 | --- | --- |
+| `TAP TO START` | AudioContextを有効化して操作画面を開く |
 | レコードをドラッグ | 回転・再生 |
 | ← / →キー | レコードを回転 |
+| `noise` | ノイズ音声の同期再生をON/OFF。状態はcookieへ保存 |
 | COLLECTION | レコード選択画面を表示 |
 | 選択画面の左右ドラッグ | レコードを切り替え |
 | 中央のレコードをクリック | レコードを選択してプレーヤーへ戻る |
-| リセットボタン | 回転と再生を停止して初期位置へ戻す |
 
 ## 構成
 
@@ -39,27 +43,28 @@ python3 -m http.server 8000
 | --- | --- |
 | `index.html` | ページ構造、操作対象、ARIA属性 |
 | `assets/js/main.js` | DDD各層の依存関係を構成して初期化 |
+| `assets/js/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | `assets/js/record-player.js` | 回転、慣性、シーク、プレーヤー表示 |
 | `assets/js/record-picker.js` | レコード選択画面、表示情報の更新 |
 | `assets/js/domain/` | レコードと一覧のドメインモデル |
 | `assets/js/application/` | レコード一覧のユースケース |
 | `assets/js/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
 | `assets/data/records.json` | レコード定義と音声URL |
-| `assets/css/main.css` | レイアウト、配色、レコード表現、レスポンシブ表示 |
-| `assets/mp3/` | 再生する音声ファイル |
+| `assets/css/main.css` | レイアウト、配色、レコード表現、操作制御 |
+| `assets/mp3/` | レコード本編の音声ファイル |
+| `assets/ogg/record_noise_loop.ogg` | 同期再生するノイズ音声 |
 | `docs/` | 機能別の仕様書 |
 
 ## 音声再生
 
-Web Audio APIを使用します。音声は`fetch`と`decodeAudioData`で読み込み、再生用のバッファをキャッシュします。音声ファイルの切り替え中はロード進捗を表示し、ロード完了後に再生可能になります。
+Web Audio APIを使用します。レコード音声は`assets/data/records.json`の`audioUrl`、ノイズ音声は`assets/js/main.js`の`RECORD_NOISE_SOURCE`から取得します。音声は`fetch`と`decodeAudioData`でバックグラウンドロードし、正転・逆転用バッファを生成します。ノイズがOFFの場合はノイズ音声をロードしません。
+
+初回表示時はスプラッシュを表示します。`TAP TO START`のクリックでAudioContextをアンロックし、操作ロックを解除します。再生秒数、選択レコード、ノイズ同期状態はcookieへ保存します。
 
 ## 確認方法
 
 ```sh
-node --check assets/js/main.js
-node --check assets/js/record-player.js
-node --check assets/js/record-picker.js
-node --check assets/js/infrastructure/web-audio-engine.js
+for file in $(rg --files assets/js); do node --check "$file"; done
 git diff --check
 ```
 

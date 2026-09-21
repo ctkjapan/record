@@ -4,24 +4,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#d5b98f" />
+  <meta name="theme-color" content="#302d5d" />
   <title>GROOVE RECORDS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/css/main.css?260920_7" />
+  <link rel="stylesheet" href="assets/css/main.css?260920_7" />
 </head>
 
 <body>
+  <section class="splash-screen" id="splashScreen" role="dialog" aria-modal="true" aria-labelledby="splashTitle"
+    aria-describedby="splashStatus">
+    <div class="splash-content">
+      <p class="splash-kicker">
+        <span class="wordmark" href="./" aria-label="GROOVE RECORDS ホーム">
+          <span class="wordmark-mark" aria-hidden="true"></span>
+          <span>GROOVE<br />RECORDS</span>
+        </span>
+      </p>
+      <h1 id="splashTitle">Put the needle on.</h1>
+      <button class="button splash-button" id="splashStartButton" type="button">TAP TO START</button>
+      <p class="splash-status" id="splashStatus" aria-live="polite">Tap to enable audio.</p>
+    </div>
+  </section>
+
   <header class="top-bar">
     <a class="wordmark" href="./" aria-label="GROOVE RECORDS ホーム">
       <span class="wordmark-mark" aria-hidden="true"></span>
       <span>GROOVE<br />RECORDS</span>
     </a>
     <nav class="top-bar-actions">
-      <button class="change-button" id="changeButton" type="button" aria-pressed="false">COLLECTION</button>
+      <button class="button noise-button" id="noiseButton" type="button" aria-pressed="false">noise</button>
+      <button class="button change-button" id="changeButton" type="button" aria-pressed="false">COLLECTION</button>
     </nav>
   </header>
 
@@ -72,7 +88,7 @@
           <div>
             <h2>Choose<br />your record.</h2>
           </div>
-          <button class="close-button" id="closePickerButton" type="button">BACK TO PLAYER</button>
+          <button class="button close-button" id="closePickerButton" type="button">BACK TO PLAYER</button>
         </div>
         <div class="picker-window">
           <div class="picker-track" id="pickerTrack"></div>
@@ -86,7 +102,7 @@
     </section>
   </main>
 
-  <script type="module" src="/assets/js/main.js?260920_8"></script>
+  <script type="module" src="assets/js/main.js?260920_8"></script>
 </body>
 
 </html>
