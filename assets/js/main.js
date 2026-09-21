@@ -1,14 +1,23 @@
 import { RecordCatalogService } from './application/record-catalog-service.js';
+import { PlaybackService } from './application/playback-service.js';
 import { PlaybackStateRepository } from './infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from './infrastructure/record-json-repository.js';
 import { WebAudioEngine } from './infrastructure/web-audio-engine.js';
-import { RecordPickerController } from './record-picker.js';
-import { RecordPlayerController } from './record-player.js';
-import { SplashController } from './splash-controller.js';
-import { MenuController } from './menu-controller.js';
+import { RecordPickerController } from './controller/record-picker-controller.js';
+import { RecordPlayerController } from './controller/record-player-controller.js';
+import { SplashController } from './controller/splash-controller.js';
+import { MenuController } from './controller/menu-controller.js';
+import { TextRevealController } from './controller/text-reveal-controller.js';
 
 // ブラウザの履歴スワイプと判定する画面端からの保護幅（px）。
 const EDGE_SWIPE_GUARD_PX = 32;
+
+/** ブラウザによるページ復元時に状態を初期化するためリロードする。 */
+function reloadRestoredPage() {
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted || document.wasDiscarded === true) window.location.reload();
+    });
+}
 
 /** プルダウン更新と左右端からの履歴スワイプを無効化する。 */
 function preventMobileBrowserGestures() {
@@ -48,11 +57,15 @@ function preventMobileBrowserGestures() {
     );
 }
 
+reloadRestoredPage();
 preventMobileBrowserGestures();
 
 // ヘッダーメニューの開閉Controllerを初期化する。
 const menuController = new MenuController();
 menuController.initialize();
+// 初回表示テキストを文字単位でアニメーションするController。
+const textRevealController = new TextRevealController();
+textRevealController.initialize();
 
 // レコード一覧JSONの公開URL。
 const RECORDS_LIST = '../data/records.json';
@@ -61,10 +74,12 @@ const RECORD_NOISE_SOURCE = 'assets/ogg/record_noise_loop.ogg';
 
 // cookieを介して選択レコードと再生秒数を永続化する実装。
 const playbackStateRepository = new PlaybackStateRepository();
+const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false });
+const playbackService = new PlaybackService({ audioEngine, playbackStateRepository });
 // 音声再生とプレーヤー画面を接続するController。
 const playerController = new RecordPlayerController({
-    audioEngine: new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false }),
-    playbackStateRepository,
+    audioEngine,
+    playbackService,
 });
 playerController.initialize();
 // 初回ユーザー操作で音声を有効化するスプラッシュController。
@@ -85,6 +100,8 @@ const recordCatalogService = new RecordCatalogService(new RecordJsonRepository(n
 const pickerController = new RecordPickerController({
     recordCatalogService,
     playerController,
-    playbackStateRepository,
+    playbackService,
+    openMenu: () => menuController.open(),
+    textRevealController,
 });
 pickerController.initialize();

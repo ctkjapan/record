@@ -1,19 +1,17 @@
-// レコード回転から再生速度を計算するためのドメインルール設定。
-// 慣性回転をフレームごとに維持する割合。1のため回転速度を減衰させない。
-const MOMENTUM_PERSISTENCE_RATE = 1;
-const MIN_PLAYBACK_RATE = 0;
-const MAX_PLAYBACK_RATE = 2;
-const PLAYBACK_RATE_SMOOTHING = 0.1;
-const ROTATION_SPEED_SCALE = 8;
-const MIN_CENTER = 45;
-const MAX_CENTER = 55;
+import { MIN_PLAYBACK_RATE } from '../domain/playback-rate.js';
+import {
+    MOMENTUM_PERSISTENCE_RATE,
+    PLAYBACK_RATE_SMOOTHING,
+    ROTATION_SPEED_SCALE,
+    PlaybackPolicy,
+} from '../domain/playback-policy.js';
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
-    constructor({ audioEngine, playbackStateRepository }) {
+    constructor({ audioEngine, playbackService }) {
         // 音声再生と保存処理を担当する依存オブジェクト。
         this.audioEngine = audioEngine;
-        this.playbackStateRepository = playbackStateRepository;
+        this.playbackService = playbackService;
         // プレーヤー画面のDOM要素。
         this.record = document.querySelector('#record');
         this.recordLabel = document.querySelector('#label, .label');
@@ -47,12 +45,22 @@ export class RecordPlayerController {
         this.pendingSeekSeconds = 0;
         this.audioTimeFrame = null;
         this.visualizerFrame = null;
+        this.visualizerEnabled = true;
+        this.visualizerLayout = null;
+        this.visualizerAccent = null;
+        this.visualizerResizeObserver = null;
+        this.recordBounds = null;
         // 表示更新の重複を抑えるための前回値。
         this.lastPlaybackCookieSaveAt = 0;
         this.lastAudioTimeLabel = '';
         this.lastPlaybackRateLabel = '';
         this.lastPlayStateLabel = '';
         this.lastAudioBusyState = null;
+        this.lastAudioSeekMax = null;
+        this.lastAudioSeekDisabled = null;
+        this.lastAudioSeekValue = null;
+        this.lastAngleLabel = '';
+        this.lastMeterWidth = '';
         this.lastRenderedRotation = null;
 
         // 音声エンジンからのロード状態を画面へ中継する。
@@ -66,10 +74,25 @@ export class RecordPlayerController {
     /** DOMイベントとページ離脱時の保存処理を初期化する。 */
     initialize() {
         this.bindEvents();
-        const { noiseEnabled } = this.playbackStateRepository.load();
-        this.audioEngine.setNoiseEnabled(noiseEnabled).catch(() => {});
+        const { noiseEnabled } = this.playbackService.getState();
         this.updateNoiseButton(noiseEnabled);
+        this.playbackService.restore().then(({ noiseEnabled: restoredNoiseEnabled }) => {
+            this.updateNoiseButton(restoredNoiseEnabled);
+        }).catch(() => {});
+        this.updatePlaybackDirectionButton();
         window.addEventListener('pagehide', () => this.persistPlaybackSeconds(true));
+        window.addEventListener('resize', () => this.invalidateVisualizer());
+        if (typeof ResizeObserver === 'function' && this.visualizerCanvas) {
+            this.visualizerResizeObserver = new ResizeObserver(() => this.invalidateVisualizer());
+            this.visualizerResizeObserver.observe(this.visualizerCanvas);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.clearVisualizer();
+                return;
+            }
+            this.scheduleVisualizer();
+        });
         this.setRotation(0);
         this.updateAudioTime();
         this.updatePlaybackRateLabel();
@@ -80,9 +103,15 @@ export class RecordPlayerController {
         return this.audioEngine.setSource(sourceUrl, initialSeconds);
     }
 
+    /** レコード選択時にラベル背景画像を更新する。 */
+    setLabelImage(imageUrl) {
+        if (!this.recordLabel) return;
+        this.recordLabel.style.backgroundImage = imageUrl ? `url(${JSON.stringify(imageUrl)})` : '';
+    }
+
     /** 保存済みの再生秒数を取得する。 */
     getStoredPlaybackSeconds() {
-        return this.playbackStateRepository.load().playbackSeconds;
+        return this.playbackService.getStoredPlaybackSeconds();
     }
 
     /** 慣性回転・再生を停止し、現在の再生秒数を保存する。 */
@@ -116,17 +145,10 @@ export class RecordPlayerController {
     /** noiseボタンの状態を音声エンジンへ反映する。 */
     toggleNoise() {
         const nextEnabled = !this.audioEngine.isNoiseEnabled;
-        this.audioEngine
-            .setNoiseEnabled(nextEnabled)
-            .then(() => {
-                this.playbackStateRepository.saveNoiseEnabled(this.audioEngine.isNoiseEnabled);
-                this.updateNoiseButton();
-            })
-            .catch(() => {
-                this.playbackStateRepository.saveNoiseEnabled(false);
-                this.updateNoiseButton(false);
-            });
         this.updateNoiseButton(nextEnabled);
+        this.playbackService.toggleNoise()
+            .then((enabled) => this.updateNoiseButton(enabled))
+            .catch(() => this.updateNoiseButton(false));
     }
 
     /** noiseボタンのaria状態と表示状態を更新する。 */
@@ -134,6 +156,14 @@ export class RecordPlayerController {
         if (!this.noiseButton) return;
         this.noiseButton.setAttribute('aria-pressed', String(enabled));
         this.noiseButton.classList.toggle('is-active', enabled);
+    }
+
+    /** 逆再生時のボタン状態と色を更新する。 */
+    updatePlaybackDirectionButton(direction = this.audioEngine.direction) {
+        if (!this.playbackReverseButton) return;
+        const isReverse = direction === 'reverse';
+        this.playbackReverseButton.setAttribute('aria-pressed', String(isReverse));
+        this.playbackReverseButton.classList.toggle('is-active', isReverse);
     }
 
     /** 現在秒数と総時間を表示し、シークバーの範囲を更新する。 */
@@ -146,9 +176,21 @@ export class RecordPlayerController {
             this.audioTime.textContent = nextLabel;
             this.lastAudioTimeLabel = nextLabel;
         }
-        this.audioSeek.max = String(duration);
-        this.audioSeek.disabled = duration <= 0;
-        if (!this.isSeeking) this.audioSeek.value = String(seconds);
+        const nextMax = String(duration);
+        if (nextMax !== this.lastAudioSeekMax) {
+            this.audioSeek.max = nextMax;
+            this.lastAudioSeekMax = nextMax;
+        }
+        const nextDisabled = duration <= 0;
+        if (nextDisabled !== this.lastAudioSeekDisabled) {
+            this.audioSeek.disabled = nextDisabled;
+            this.lastAudioSeekDisabled = nextDisabled;
+        }
+        const nextValue = String(Math.round(seconds * 100) / 100);
+        if (!this.isSeeking && nextValue !== this.lastAudioSeekValue) {
+            this.audioSeek.value = nextValue;
+            this.lastAudioSeekValue = nextValue;
+        }
     }
 
     /** 現在の再生速度を画面へ表示する。 */
@@ -159,18 +201,12 @@ export class RecordPlayerController {
         this.lastPlaybackRateLabel = nextLabel;
     }
 
-    /** 再生速度を0〜2倍の範囲へ制限する。 */
-    clampPlaybackRate(rate) {
-        return Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, Number(rate) || 0));
-    }
-
     /** ボタン操作で再生速度を即時設定し、回転操作まで設定値を維持する。 */
     setManualPlaybackRate(rate) {
         this.isManualPlaybackRate = true;
-        this.targetPlaybackRate = this.clampPlaybackRate(rate);
+        this.targetPlaybackRate = this.playbackService.setPlaybackRate(rate);
         cancelAnimationFrame(this.playbackRateFrame);
         this.playbackRateFrame = null;
-        this.audioEngine.setPlaybackRate(this.targetPlaybackRate);
         this.updatePlaybackRateLabel();
         this.syncRotationToPlaybackRate();
         this.startPlaybackFromSpeedControl();
@@ -178,23 +214,26 @@ export class RecordPlayerController {
 
     /** 現在の再生速度を指定量だけ増減する。 */
     adjustManualPlaybackRate(delta) {
-        this.setManualPlaybackRate(this.audioEngine.playbackRate + delta);
+        this.isManualPlaybackRate = true;
+        this.targetPlaybackRate = this.playbackService.adjustPlaybackRate(delta);
+        cancelAnimationFrame(this.playbackRateFrame);
+        this.playbackRateFrame = null;
+        this.updatePlaybackRateLabel();
+        this.syncRotationToPlaybackRate();
+        this.startPlaybackFromSpeedControl();
     }
 
     /** 再生方向を切り替え、再生中の速度方向も同期する。 */
     togglePlaybackDirection() {
-        const nextDirection = this.audioEngine.direction === 'reverse' ? 'forward' : 'reverse';
-        this.audioEngine.setDirection(nextDirection);
-        this.playbackReverseButton?.setAttribute('aria-pressed', String(nextDirection === 'reverse'));
+        const nextDirection = this.playbackService.toggleDirection();
+        this.updatePlaybackDirectionButton(nextDirection);
         this.syncRotationToPlaybackRate();
         this.startPlaybackFromSpeedControl();
     }
 
     /** 再生速度をレコードの回転速度へ変換する。 */
     getRotationSpeedPercentForPlaybackRate(rate) {
-        const normalizedRate = this.clampPlaybackRate(rate);
-        if (normalizedRate <= 1) return normalizedRate * MIN_CENTER;
-        return MAX_CENTER + ((normalizedRate - 1) / (MAX_PLAYBACK_RATE - 1)) * (100 - MAX_CENTER);
+        return PlaybackPolicy.rotationSpeedPercentFromRate(rate);
     }
 
     /** 設定済みの再生速度・方向をレコード回転へ同期する。 */
@@ -266,31 +305,28 @@ export class RecordPlayerController {
 
     /** AnalyserNodeの周波数データを使ってビジュアライザーを描画する。 */
     updateVisualizer() {
-        if (!this.isAudioPlaying) {
+        if (!this.isAudioPlaying || !this.visualizerEnabled || document.hidden) {
             this.clearVisualizer();
             return;
         }
         const data = this.audioEngine.getFrequencyData();
-        if (!data || !this.visualizerContext) {
+        if (!data?.length || !this.visualizerContext) {
             this.clearVisualizer();
             return;
         }
-        const size = this.resizeVisualizerCanvas();
-        if (!size) return;
-        const recordBounds = this.record.getBoundingClientRect();
-        const centerX = recordBounds.left - size.bounds.left + recordBounds.width / 2;
-        const centerY = recordBounds.top - size.bounds.top + recordBounds.height / 2;
-        const baseRadius = recordBounds.width / 2 + 12;
-        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#aaaaaa';
+        const layout = this.resizeVisualizerCanvas();
+        if (!layout) return;
+        const { width, height, centerX, centerY, baseRadius } = layout;
+        if (!this.visualizerAccent) this.visualizerAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#aaaaaa';
         const barAngle = (Math.PI * 2) / data.length;
-        this.visualizerContext.clearRect(0, 0, size.width, size.height);
+        this.visualizerContext.clearRect(0, 0, width, height);
         this.visualizerContext.lineWidth = 2;
         this.visualizerContext.lineCap = 'round';
+        this.visualizerContext.strokeStyle = this.visualizerAccent;
         for (let index = 0; index < data.length; index += 1) {
             const amplitude = data[index] / 255;
             const angle = index * barAngle - Math.PI / 2;
             const outerRadius = baseRadius + 8 + amplitude * 52;
-            this.visualizerContext.strokeStyle = accent;
             this.visualizerContext.globalAlpha = 0.16 + amplitude * 0.55;
             this.visualizerContext.beginPath();
             this.visualizerContext.moveTo(centerX + Math.cos(angle) * baseRadius, centerY + Math.sin(angle) * baseRadius);
@@ -298,13 +334,39 @@ export class RecordPlayerController {
             this.visualizerContext.stroke();
         }
         this.visualizerContext.globalAlpha = 1;
-        this.visualizerFrame = requestAnimationFrame(() => this.updateVisualizer());
+        this.scheduleVisualizer();
     }
 
-    /** 表示領域のサイズに合わせてキャンバス解像度を調整する。 */
+    /** ビジュアライザーの次回描画を予約する。 */
+    scheduleVisualizer() {
+        if (!this.visualizerEnabled || !this.isAudioPlaying || document.hidden || this.visualizerFrame !== null) return;
+        this.visualizerFrame = requestAnimationFrame(() => {
+            this.visualizerFrame = null;
+            this.updateVisualizer();
+        });
+    }
+
+    /** ビジュアライザーの表示・配色キャッシュを無効化する。 */
+    invalidateVisualizer() {
+        this.visualizerLayout = null;
+        this.visualizerAccent = null;
+        this.recordBounds = null;
+        if (!document.hidden) this.scheduleVisualizer();
+    }
+
+    /** ビジュアライザーの表示状態を切り替える。 */
+    setVisualizerVisible(isVisible) {
+        this.visualizerEnabled = isVisible;
+        this.invalidateVisualizer();
+        if (!isVisible) this.clearVisualizer();
+    }
+
+    /** 表示領域のサイズとレコード位置に合わせてキャンバスを調整する。 */
     resizeVisualizerCanvas() {
         if (!this.visualizerCanvas || !this.visualizerContext) return null;
+        if (this.visualizerLayout) return this.visualizerLayout;
         const bounds = this.visualizerCanvas.getBoundingClientRect();
+        const recordBounds = this.record.getBoundingClientRect();
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
         const width = Math.max(1, Math.floor(bounds.width * pixelRatio));
         const height = Math.max(1, Math.floor(bounds.height * pixelRatio));
@@ -313,7 +375,20 @@ export class RecordPlayerController {
             this.visualizerCanvas.height = height;
             this.visualizerContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
         }
-        return { width: bounds.width, height: bounds.height, bounds };
+        this.visualizerLayout = {
+            width: bounds.width,
+            height: bounds.height,
+            pixelRatio,
+            canvasLeft: bounds.left,
+            canvasTop: bounds.top,
+            recordLeft: recordBounds.left,
+            recordTop: recordBounds.top,
+            recordWidth: recordBounds.width,
+            centerX: recordBounds.left - bounds.left + recordBounds.width / 2,
+            centerY: recordBounds.top - bounds.top + recordBounds.height / 2,
+            baseRadius: recordBounds.width / 2 + 12,
+        };
+        return this.visualizerLayout;
     }
 
     /** ビジュアライザーの描画ループを停止してキャンバスを消去する。 */
@@ -321,8 +396,10 @@ export class RecordPlayerController {
         cancelAnimationFrame(this.visualizerFrame);
         this.visualizerFrame = null;
         if (!this.visualizerContext) return;
-        const size = this.resizeVisualizerCanvas();
-        if (size) this.visualizerContext.clearRect(0, 0, size.width, size.height);
+        this.visualizerContext.save();
+        this.visualizerContext.setTransform(1, 0, 0, 1, 0, 0);
+        this.visualizerContext.clearRect(0, 0, this.visualizerCanvas.width, this.visualizerCanvas.height);
+        this.visualizerContext.restore();
     }
 
     /** 再生開始／停止を音声エンジンと画面状態へ反映する。 */
@@ -342,7 +419,7 @@ export class RecordPlayerController {
             cancelAnimationFrame(this.audioTimeFrame);
             cancelAnimationFrame(this.visualizerFrame);
             this.updateAudioTimeLoop();
-            this.updateVisualizer();
+            this.scheduleVisualizer();
         } else {
             this.audioEngine.stop();
             this.cancelPlaybackLoops();
@@ -384,7 +461,7 @@ export class RecordPlayerController {
         if (!force && now - this.lastPlaybackCookieSaveAt < 500) return;
         this.lastPlaybackCookieSaveAt = now;
         const seconds = this.isSeeking ? this.pendingSeekSeconds : this.audioEngine.getCurrentSeconds();
-        this.playbackStateRepository.savePlaybackSeconds(seconds);
+        this.playbackService.savePlaybackSeconds(seconds);
     }
 
     /** レコード操作を開始し、初期状態を記録する。 */
@@ -393,6 +470,7 @@ export class RecordPlayerController {
         this.isManualPlaybackRate = false;
         this.stopMomentum();
         this.pointerId = event.pointerId;
+        this.recordBounds = this.record.getBoundingClientRect();
         this.previousAngle = this.angleFromCenter(event);
         this.lastMoveTime = performance.now();
         this.record.setPointerCapture(this.pointerId);
@@ -419,6 +497,7 @@ export class RecordPlayerController {
         if (event.pointerId !== this.pointerId) return;
         this.pointerId = null;
         this.previousAngle = null;
+        this.recordBounds = null;
         if (event.type === 'pointerup' && Math.abs(this.velocity) > 0.02) {
             this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
             return;
@@ -458,6 +537,7 @@ export class RecordPlayerController {
         this.momentumFrame = null;
         this.velocity = 0;
         this.meterFill.style.width = '0%';
+        this.lastMeterWidth = '0%';
         this.targetPlaybackRate = MIN_PLAYBACK_RATE;
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }
@@ -471,12 +551,24 @@ export class RecordPlayerController {
             this.lastRenderedRotation = rotationStyle;
         }
         const normalized = ((Math.round(this.rotation) % 360) + 360) % 360;
-        this.angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
-        this.record.setAttribute('aria-valuenow', normalized);
+        const nextAngleLabel = `${String(normalized).padStart(3, '0')}°`;
+        if (nextAngleLabel !== this.lastAngleLabel) {
+            this.angleValue.textContent = nextAngleLabel;
+            this.lastAngleLabel = nextAngleLabel;
+            this.record.setAttribute('aria-valuenow', normalized);
+        }
         const speedPercent = this.getRotationSpeedPercent();
-        this.meterFill.style.width = `${speedPercent}%`;
+        const nextMeterWidth = `${speedPercent}%`;
+        if (nextMeterWidth !== this.lastMeterWidth) {
+            this.meterFill.style.width = nextMeterWidth;
+            this.lastMeterWidth = nextMeterWidth;
+        }
         if (!this.isManualPlaybackRate) this.targetPlaybackRate = this.getPlaybackRateForSpeed(speedPercent);
-        this.audioEngine.setDirection(this.velocity < 0 ? 'reverse' : this.velocity > 0 ? 'forward' : this.audioEngine.direction);
+        const nextDirection = this.velocity < 0 ? 'reverse' : this.velocity > 0 ? 'forward' : this.audioEngine.direction;
+        if (nextDirection !== this.audioEngine.direction) {
+            this.audioEngine.setDirection(nextDirection);
+            this.updatePlaybackDirectionButton(nextDirection);
+        }
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }
 
@@ -484,19 +576,19 @@ export class RecordPlayerController {
     updatePlaybackRate() {
         const difference = this.targetPlaybackRate - this.audioEngine.playbackRate;
         if (Math.abs(difference) < 0.01) {
-            this.audioEngine.setPlaybackRate(this.targetPlaybackRate);
+            this.playbackService.setPlaybackRate(this.targetPlaybackRate);
             this.updatePlaybackRateLabel();
             this.playbackRateFrame = null;
             return;
         }
-        this.audioEngine.setPlaybackRate(this.audioEngine.playbackRate + difference * PLAYBACK_RATE_SMOOTHING);
+        this.playbackService.setPlaybackRate(this.audioEngine.playbackRate + difference * PLAYBACK_RATE_SMOOTHING);
         this.updatePlaybackRateLabel();
         this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }
 
     /** ポインター座標からレコード中心を基準にした角度を求める。 */
     angleFromCenter(event) {
-        const bounds = this.record.getBoundingClientRect();
+        const bounds = this.recordBounds || this.record.getBoundingClientRect();
         const centerX = bounds.left + bounds.width / 2;
         const centerY = bounds.top + bounds.height / 2;
         return (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI;
@@ -509,9 +601,7 @@ export class RecordPlayerController {
 
     /** 回転速度の割合をWeb Audioの再生速度へ変換する。 */
     getPlaybackRateForSpeed(speedPercent) {
-        if (speedPercent <= MIN_CENTER) return MIN_PLAYBACK_RATE + (speedPercent / MIN_CENTER) * (1 - MIN_PLAYBACK_RATE);
-        if (speedPercent <= MAX_CENTER) return 1;
-        return 1 + ((speedPercent - MAX_CENTER) / MIN_CENTER) * (MAX_PLAYBACK_RATE - 1);
+        return PlaybackPolicy.rateFromRotationSpeedPercent(speedPercent);
     }
 
     /** 秒数を画面表示用のmm:ssまたはhh:mm:ssへ変換する。 */

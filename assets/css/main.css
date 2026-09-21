@@ -46,6 +46,10 @@ a:focus-visible,
 }
 
 body {
+  &.menu-open {
+    overflow: hidden;
+  }
+
   &.is-splash-visible {
     overflow: hidden;
   }
@@ -57,11 +61,6 @@ body {
     width: max-content;
     padding: 0;
     color: var(--white);
-    font-size: .62rem;
-    font-weight: 700;
-    line-height: 1.05;
-    letter-spacing: .08em;
-    text-decoration: none;
     background: transparent;
     border: none;
     mix-blend-mode: overlay;
@@ -97,6 +96,15 @@ body {
     font-family: "DM Mono", monospace;
   }
 
+  .text-reveal-character {
+    display: inline-block;
+    white-space: pre;
+    opacity: 0;
+    transform: translateY(110%);
+    animation: text-reveal-in .6s cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(var(--text-reveal-index) * 35ms);
+  }
+
   .button {
     padding: 10px 20px;
     letter-spacing: .1em;
@@ -114,15 +122,6 @@ body {
 
     &.is-active {
       color: var(--black);
-      background: var(--white);
-    }
-  }
-
-  .close-button {
-    display: none;
-
-    &:hover {
-      color: var(--violet);
       background: var(--white);
     }
   }
@@ -150,6 +149,11 @@ body {
         font-weight: 500;
         line-height: .9;
         letter-spacing: -.08em;
+      }
+
+      .wordmark {
+        margin-bottom: 42px;
+        scale: 2.5;
       }
 
       .splash-button {
@@ -182,6 +186,8 @@ body {
       position: absolute;
       top: 20px;
       right: 20px;
+      opacity: .6;
+      scale: 1.5;
       z-index: 1000;
     }
 
@@ -197,23 +203,30 @@ body {
       align-items: center;
       gap: 8px;
       background: rgba(48, 45, 93, .1);
-      backdrop-filter: blur(2px);
-      -webkit-backdrop-filter: blur(2px);
+      backdrop-filter: blur(1px);
+      -webkit-backdrop-filter: blur(1px);
       overflow: hidden;
+      touch-action: none;
 
       &[hidden] {
         display: none;
       }
 
       &.is-closing {
-        /* animation: menu-zoom-in .32s cubic-bezier(.2, .8, .2, 1) both;
-        pointer-events: none; */
-        animation: dummy .32s cubic-bezier(.2, .8, .2, 1) both;
+        animation: menu-zoom-in .32s cubic-bezier(.2, .8, .2, 1) both;
+        pointer-events: none;
 
         .button {
           animation: menu-zoom-in .32s cubic-bezier(.2, .8, .2, 1) both;
           pointer-events: none;
         }
+      }
+
+      h2 {
+        margin: 10px 0;
+        font-size: 1rem;
+        color: var(--white);
+        text-shadow: 1px 1px 2px var(--violet);
       }
 
       .button {
@@ -229,18 +242,7 @@ body {
         position: relative;
         font-family: "Space Grotesk", sans-serif;
         font-size: 1rem;
-        border-width: 2px;
-        border-radius: 50%;
-        aspect-ratio: 1;
         margin-bottom: 10px;
-
-        &::before {
-          position: absolute;
-          inset: 4px;
-          border: 1px solid currentColor;
-          border-radius: 50%;
-          content: "";
-        }
       }
 
       .playback-speed-changer {
@@ -257,6 +259,12 @@ body {
 
       .noise-button.is-active:after {
         content: "ON";
+      }
+
+      #playbackReverse.is-active {
+        color: var(--white);
+        border-color: var(--coral);
+        background: var(--coral);
       }
     }
   }
@@ -294,8 +302,8 @@ body {
           line-height: .82;
           letter-spacing: -.065em;
 
-          & span,
-          & em {
+          &>span,
+          &>em {
             display: block;
           }
 
@@ -326,6 +334,7 @@ body {
           min-height: 100svh;
           margin-left: auto;
           overflow: hidden;
+          touch-action: none;
 
           isolation: isolate;
 
@@ -389,7 +398,7 @@ body {
 
             .grooves {
               position: absolute;
-              inset: 11%;
+              inset: 7%;
               border: 1px solid rgba(255, 255, 255, .085);
               border-radius: 50%;
               transition: opacity 8s;
@@ -400,7 +409,7 @@ body {
               }
 
               &.grooves-two {
-                inset: 21%;
+                inset: 16%;
                 background: var(--accent);
                 opacity: 0;
               }
@@ -408,18 +417,17 @@ body {
 
             .label {
               position: absolute;
-              inset: 33%;
-              display: grid;
-              place-content: center;
-              gap: 5px;
+              inset: 25%;
               border-radius: 50%;
-              color: var(--violet-deep);
-              background: var(--accent);
+              background-color: var(--accent);
+              background-position: center;
+              background-repeat: no-repeat;
+              background-size: cover;
               text-align: center;
               box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2);
               transform: rotate(0deg);
               transform-origin: center;
-              will-change: transform;
+              will-change: auto;
 
               &::before {
                 position: absolute;
@@ -571,6 +579,7 @@ body {
           justify-content: space-between;
           gap: 20px;
           padding: 0 clamp(24px, 5vw, 72px);
+          mix-blend-mode: overlay;
 
           & h2 {
             margin: 0;
@@ -757,6 +766,10 @@ body {
             }
 
             .record {
+              .label {
+                will-change: transform;
+              }
+
               .grooves {
                 &.grooves-one {
                   opacity: .1;
@@ -785,8 +798,10 @@ body {
   &.is-loading {
     --accent: #aaaaaa;
 
-    .wordmark {
-      display: none;
+    header.top-bar {
+      .wordmark {
+        display: none;
+      }
     }
 
     main.app-shell {
@@ -822,8 +837,10 @@ body {
   &.picker-open {
     background: var(--violet);
 
-    .wordmark {
-      display: none;
+    header.top-bar {
+      .wordmark {
+        display: none;
+      }
     }
 
     header.top-bar {
@@ -845,9 +862,13 @@ body {
     animation-duration: .01ms !important;
     transition-duration: .01ms !important;
   }
-}
 
-@keyframes dummy {}
+  .text-reveal-character {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
 
 @keyframes menu-zoom-out {
   0% {
@@ -880,5 +901,17 @@ body {
 
   100% {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes text-reveal-in {
+  0% {
+    opacity: 0;
+    transform: translateY(110%);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
