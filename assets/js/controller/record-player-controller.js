@@ -1,14 +1,9 @@
 import { MIN_PLAYBACK_RATE } from '../domain/playback-rate.js';
-import {
-    MOMENTUM_PERSISTENCE_RATE,
-    PLAYBACK_RATE_SMOOTHING,
-    ROTATION_SPEED_SCALE,
-    PlaybackPolicy,
-} from '../domain/playback-policy.js';
+import { MOMENTUM_PERSISTENCE_RATE, PLAYBACK_RATE_SMOOTHING, ROTATION_SPEED_SCALE, PlaybackPolicy } from '../domain/playback-policy.js';
 
 // ビジュアライザー描画の線幅。
 const VISUALIZER_BAR_LINE_WIDTH = 4;
-const VISUALIZER_WAVEFORM_LINE_WIDTH = 2.5;
+const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
@@ -85,9 +80,12 @@ export class RecordPlayerController {
         this.updateNoiseButton(noiseEnabled);
         this.setVisualizerEnabled(visualizerEnabled);
         this.updateVisualizerButton(visualizerEnabled);
-        this.playbackService.restore().then(({ noiseEnabled: restoredNoiseEnabled }) => {
-            this.updateNoiseButton(restoredNoiseEnabled);
-        }).catch(() => {});
+        this.playbackService
+            .restore()
+            .then(({ noiseEnabled: restoredNoiseEnabled }) => {
+                this.updateNoiseButton(restoredNoiseEnabled);
+            })
+            .catch(() => {});
         this.updatePlaybackDirectionButton();
         window.addEventListener('pagehide', () => this.persistPlaybackSeconds(true));
         window.addEventListener('resize', () => this.invalidateVisualizer());
@@ -164,7 +162,8 @@ export class RecordPlayerController {
     toggleNoise() {
         const nextEnabled = !this.audioEngine.isNoiseEnabled;
         this.updateNoiseButton(nextEnabled);
-        this.playbackService.toggleNoise()
+        this.playbackService
+            .toggleNoise()
             .then((enabled) => this.updateNoiseButton(enabled))
             .catch(() => this.updateNoiseButton(false));
     }

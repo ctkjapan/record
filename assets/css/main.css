@@ -203,8 +203,6 @@ body {
       align-items: center;
       gap: 8px;
       background: rgba(48, 45, 93, .2);
-      backdrop-filter: blur(1px);
-      -webkit-backdrop-filter: blur(1px);
       overflow: hidden;
       touch-action: none;
 
@@ -232,8 +230,6 @@ body {
       .button {
         font-size: .75rem;
         border-radius: .5rem;
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
         transform-origin: center;
         animation: menu-zoom-out .32s cubic-bezier(.2, .8, .2, 1) both;
       }
