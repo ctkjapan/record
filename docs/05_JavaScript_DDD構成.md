@@ -45,12 +45,12 @@ docs/
 | Domain | `assets/js/domain/record.js`、`record-catalog.js` | レコードと一覧のルール |
 | Domain | `assets/js/domain/playback-rate.js`、`playback-direction.js` | 再生速度・方向の値と切替ルール |
 | Domain | `assets/js/domain/playback-policy.js` | 回転速度と再生速度の変換、慣性設定 |
-| Domain | `assets/js/domain/playback-session.js` | レコードID、再生秒数、ノイズ設定の状態 |
+| Domain | `assets/js/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
 | Application | `assets/js/application/record-catalog-service.js` | レコード一覧のユースケース |
 | Application | `assets/js/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
 | Infrastructure | `assets/js/infrastructure/record-json-repository.js` | JSON取得 |
 | Infrastructure | `assets/js/infrastructure/playback-state-repository.js` | cookie保存・復元 |
-| Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期 |
+| Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
 | Presentation | `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | Presentation | `assets/js/controller/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
 | Presentation | `assets/js/controller/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
@@ -69,9 +69,9 @@ docs/
 3. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
 4. `RecordCatalogService`が`RecordCatalog`を生成する。
 5. `RecordPickerController`が`PlaybackService`へレコード選択を依頼し、選択レコードの`audioUrl`を`RecordPlayerController`へ渡す。
-6. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`の背景画像を更新する。
+6. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
 7. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
-8. `PlaybackService`が`PlaybackSession`を更新し、`PlaybackStateRepository`へレコードID、再生秒数、ノイズ同期状態の保存を依頼する。
+8. `PlaybackService`が`PlaybackSession`を更新し、`PlaybackStateRepository`へレコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態の保存を依頼する。
 
 ## DDDルール
 
@@ -87,5 +87,6 @@ docs/
 | `groove-record-index` | 選択レコードID |
 | `groove-record-playback-seconds` | 音声ファイル上の再生秒数 |
 | `groove-record-noise-enabled` | ノイズ同期のON/OFF |
+| `groove-record-visualizer-enabled` | ビジュアライザー描画のON/OFF |
 
 旧cookie`groove-record-playback-position`は再生秒数の読み込み時だけ互換対応します。

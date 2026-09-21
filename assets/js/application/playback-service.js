@@ -65,6 +65,13 @@ export class PlaybackService {
         }
     }
 
+    /** ビジュアライザー描画状態を切り替え、cookieへ保存する。 */
+    toggleVisualizer() {
+        this.session = this.session.withVisualizerEnabled(!this.session.visualizerEnabled);
+        this.playbackStateRepository.saveVisualizerEnabled(this.session.visualizerEnabled);
+        return this.session.visualizerEnabled;
+    }
+
     /** 現在の再生秒数をセッションとcookieへ保存する。 */
     savePlaybackSeconds(seconds) {
         this.session = this.session.withPlaybackSeconds(seconds);

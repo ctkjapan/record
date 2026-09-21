@@ -233,7 +233,7 @@ export class RecordPickerController {
         }
         const { initialSeconds } = this.playbackService.selectRecord(record);
         this.playerController.setAudioSource(record.audioUrl, initialSeconds).catch(() => {});
-        this.playerController.setLabelImage(record.imageUrl);
+        this.playerController.setRecordImage(record.imageUrl);
         document.documentElement.style.setProperty('--accent', record.color);
         this.albumNumber.textContent = String(index + 1).padStart(2, '0');
         this.albumArtist.textContent = record.artist;
@@ -260,7 +260,7 @@ export class RecordPickerController {
         this.playerPanel.hidden = false;
         this.pageBody.classList.remove('picker-open');
         this.changeButton.setAttribute('aria-pressed', 'false');
-        this.playerController.setVisualizerVisible?.(true);
+        this.playerController.restoreVisualizerVisibility?.();
     }
 
     /** スクロール位置から中央に最も近いカードを計算する。 */

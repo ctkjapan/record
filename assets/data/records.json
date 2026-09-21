@@ -75,5 +75,12 @@
     "color": "#9f928b",
     "audioUrl": "assets/mp3/JSRF - Funky Dealer.mp3",
     "imageUrl": "assets/images/JSRF - Funky Dealer.jpg"
+  },
+  {
+    "id": "012",
+    "title": "米津玄師 / Plazma",
+    "color": "#13ff26",
+    "audioUrl": "assets/mp3/米津玄師 - Plazma.mp3",
+    "imageUrl": "assets/images/米津玄師 - Plazma.jpg"
   }
 ]

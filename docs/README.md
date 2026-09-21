@@ -34,12 +34,12 @@
 - ページ言語：日本語（`lang="ja"`）
 - タイトル：`VINYL`
 - 初期表示レコード：cookie保存値、保存値がない場合は`001 P4D / Dance!`
-- レコード数：`assets/data/records.json`の定義数（現在11件）
+- レコード数：`assets/data/records.json`の定義数（現在12件）
 - 音声方式：Web Audio API（`fetch` → `decodeAudioData`）
 - レコード音声：`assets/data/records.json`の`audioUrl`で指定
-- ラベル背景画像：`assets/data/records.json`の`imageUrl`で指定し、`#label`へ表示
+- 背景画像：`assets/data/records.json`の`imageUrl`で指定し、`#label`と`PagePlayer`へ表示
 - ノイズ音声：`assets/ogg/record_noise_loop.ogg`
-- 保存cookie：レコードID、再生秒数、ノイズ同期状態
+- 保存cookie：レコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態
 - 外部フォント：Google Fontsの`DM Mono`、`Space Grotesk`
 - 外部データ：`assets/data/records.json`
 - サーバーAPI：なし

@@ -3,6 +3,10 @@ const MIN_LOAD_PROGRESS = 0;
 const DOWNLOAD_PROGRESS_MAX = 80;
 const DECODE_PROGRESS = 85;
 const REVERSE_BUFFER_PROGRESS_START = 92;
+// ビジュアライザーの反応性を高める解析設定。
+const VISUALIZER_MIN_DECIBELS = -90;
+const VISUALIZER_MAX_DECIBELS = -10;
+const VISUALIZER_SMOOTHING = 0.5;
 
 /** Web Audio APIを隠蔽し、音声の取得・デコード・再生状態を管理するインフラ実装。 */
 export class WebAudioEngine {
@@ -27,6 +31,7 @@ export class WebAudioEngine {
         // 解析用ノードと可視化データ。
         this.audioAnalyser = null;
         this.visualizerData = null;
+        this.visualizerTimeData = null;
         // 現在の再生位置・方向・速度を表す状態（位置の単位は秒）。
         this.audioSourceStartedAt = 0;
         this.audioSourceStartTime = 0;
@@ -70,12 +75,7 @@ export class WebAudioEngine {
 
     /** メイン音声と有効なノイズ音声の再生準備が完了しているかを返す。 */
     isSourceReady() {
-        return Boolean(
-            this.audioBuffer
-            && this.reversedAudioBuffer
-            && this.duration > 0
-            && (!this.noiseEnabled || !this.noiseSourceUrl || this.noiseAudioBuffer),
-        );
+        return Boolean(this.audioBuffer && this.reversedAudioBuffer && this.duration > 0 && (!this.noiseEnabled || !this.noiseSourceUrl || this.noiseAudioBuffer));
     }
 
     /** ノイズ音声の同期再生が有効かを返す。 */
@@ -96,16 +96,20 @@ export class WebAudioEngine {
         return this.visualizerData;
     }
 
+    /** AnalyserNodeから時間領域の波形データを取得する。 */
+    getTimeDomainData() {
+        if (!this.audioSource || !this.audioAnalyser || !this.visualizerTimeData) return null;
+        this.audioAnalyser.getByteTimeDomainData(this.visualizerTimeData);
+        return this.visualizerTimeData;
+    }
+
     /** 音源を切り替え、指定された秒数を初期再生位置としてロードする。 */
     async setSource(sourceUrl, initialSeconds = 0) {
         if (!sourceUrl) throw new Error('音声ファイルのURLが指定されていません。');
         const requestedSeconds = this.normalizeSeconds(initialSeconds);
         if (sourceUrl === this.audioSourceUrl && (this.audioBuffer || this.audioLoadPromise)) {
             this.logicalSeconds = requestedSeconds;
-            const currentLoadPromise = Promise.all([
-                this.audioLoadPromise || Promise.resolve(this.audioBuffer),
-                this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
-            ]);
+            const currentLoadPromise = Promise.all([this.audioLoadPromise || Promise.resolve(this.audioBuffer), this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null)]);
             const [buffer] = await currentLoadPromise;
             this.logicalSeconds = this.clampSeconds(requestedSeconds);
             return buffer;
@@ -123,10 +127,7 @@ export class WebAudioEngine {
         this.logicalSeconds = requestedSeconds;
         this.setLoading(true, MIN_LOAD_PROGRESS);
 
-        const nextLoadPromise = Promise.all([
-            this.loadAudioBuffer(),
-            this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
-        ]);
+        const nextLoadPromise = Promise.all([this.loadAudioBuffer(), this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null)]);
         try {
             const [buffer] = await nextLoadPromise;
             if (sourceUrl === this.audioSourceUrl) {
@@ -151,11 +152,7 @@ export class WebAudioEngine {
         // バッファが準備済みでもAudioContextの再開が遅れる場合があるため、開始完了までロード中にする。
         this.setLoading(true, Math.min(this.audioLoadProgress, 99));
         try {
-            await Promise.all([
-                this.unlock(),
-                this.loadAudioBuffer(),
-                this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
-            ]);
+            await Promise.all([this.unlock(), this.loadAudioBuffer(), this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null)]);
             if (requestId === this.playbackStartRequestId && this.isPlaying) this.startSource();
         } catch (error) {
             if (requestId !== this.playbackStartRequestId) return;
@@ -378,9 +375,12 @@ export class WebAudioEngine {
         if (this.audioAnalyser) return this.audioAnalyser;
         this.audioAnalyser = context.createAnalyser();
         this.audioAnalyser.fftSize = 128;
-        this.audioAnalyser.smoothingTimeConstant = 0.8;
+        this.audioAnalyser.minDecibels = VISUALIZER_MIN_DECIBELS;
+        this.audioAnalyser.maxDecibels = VISUALIZER_MAX_DECIBELS;
+        this.audioAnalyser.smoothingTimeConstant = VISUALIZER_SMOOTHING;
         this.audioAnalyser.connect(context.destination);
         this.visualizerData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+        this.visualizerTimeData = new Uint8Array(this.audioAnalyser.fftSize);
         return this.audioAnalyser;
     }
 

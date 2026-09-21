@@ -57,8 +57,17 @@ function preventMobileBrowserGestures() {
     );
 }
 
+/** タップ長押しによるコンテキストメニューとドラッグ開始を無効化する。 */
+function preventLongPress() {
+    document.addEventListener('contextmenu', (event) => {
+        if (event.target instanceof Element) event.preventDefault();
+    });
+    document.addEventListener('dragstart', (event) => event.preventDefault());
+}
+
 reloadRestoredPage();
 preventMobileBrowserGestures();
+preventLongPress();
 
 // ヘッダーメニューの開閉Controllerを初期化する。
 const menuController = new MenuController();

@@ -4,12 +4,14 @@ const RECORD_ID_COOKIE = 'groove-record-index';
 const PLAYBACK_SECONDS_COOKIE = 'groove-record-playback-seconds';
 // ノイズ音声の同期再生状態を保存するcookie名。
 const NOISE_ENABLED_COOKIE = 'groove-record-noise-enabled';
+// ビジュアライザー描画状態を保存するcookie名。
+const VISUALIZER_ENABLED_COOKIE = 'groove-record-visualizer-enabled';
 // 旧バージョンの再生位置cookie。既存ユーザーの状態復元に使用する。
 const LEGACY_PLAYBACK_COOKIE = 'groove-record-playback-position';
 // cookieを保持する期間（1年）。
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-/** 選択状態、再生秒数、ノイズ同期状態をcookieへ保存・復元するリポジトリ。 */
+/** 選択状態、再生秒数、音声設定をcookieへ保存・復元するリポジトリ。 */
 export class PlaybackStateRepository {
     /** cookieから再生状態を読み込み、異常値は初期値へ補正する。 */
     load() {
@@ -20,6 +22,7 @@ export class PlaybackStateRepository {
             recordId,
             playbackSeconds: Number.isFinite(playbackSeconds) && playbackSeconds >= 0 ? playbackSeconds : 0,
             noiseEnabled: this.readCookie(NOISE_ENABLED_COOKIE) === 'true',
+            visualizerEnabled: this.readCookie(VISUALIZER_ENABLED_COOKIE) !== 'false',
         };
     }
 
@@ -38,6 +41,11 @@ export class PlaybackStateRepository {
     /** ノイズ音声の同期再生状態をcookieへ保存する。 */
     saveNoiseEnabled(enabled) {
         this.writeCookie(NOISE_ENABLED_COOKIE, String(Boolean(enabled)));
+    }
+
+    /** ビジュアライザー描画状態をcookieへ保存する。 */
+    saveVisualizerEnabled(enabled) {
+        this.writeCookie(VISUALIZER_ENABLED_COOKIE, String(Boolean(enabled)));
     }
 
     /** 指定名のcookie値を読み込む。 */

@@ -8,11 +8,12 @@
 - 回転速度に連動した再生速度の変更
 - 慣性回転と正転・逆転再生
 - `assets/data/records.json`に定義したレコード選択
-- レコード画像の`label`背景表示
+- レコード画像の`label`・`PagePlayer`背景表示
 - 音声ロード進捗の表示
 - 音声ロード中のレコードのモノクロ表示
 - 初回表示時のスプラッシュと音声再生許可
 - ノイズ音声の同期再生ON/OFFと状態のcookie保存
+- ビジュアライザー描画ON/OFFと状態のcookie保存
 - ヘッダーメニューの開閉
 - プルダウンリフレッシュと左右端の履歴スワイプの抑止
 - レスポンシブ表示と基本的なキーボードアクセシビリティ
@@ -36,6 +37,7 @@ python3 -m http.server 8000
 | レコードをドラッグ | 回転・再生 |
 | ← / →キー | レコードを回転 |
 | `noiseButton` | ノイズ音声の同期再生をON/OFF。状態はcookieへ保存 |
+| `visualizerButton` | ビジュアライザー描画をON/OFF。状態はcookieへ保存 |
 | `changeButton`（COLLECTION） | レコード選択画面を表示 |
 | 選択画面の左右ドラッグ | レコードを切り替え |
 | 中央のレコードをクリック | レコードを選択してプレーヤーへ戻る |
@@ -62,9 +64,9 @@ python3 -m http.server 8000
 
 ## 音声再生
 
-Web Audio APIを使用します。レコード音声は`assets/data/records.json`の`audioUrl`、ラベル背景画像は`imageUrl`、ノイズ音声は`assets/js/main.js`の`RECORD_NOISE_SOURCE`から取得します。音声は`fetch`と`decodeAudioData`でバックグラウンドロードし、正転・逆転用バッファを生成します。ノイズがOFFの場合はノイズ音声をロードしません。
+Web Audio APIを使用します。レコード音声は`assets/data/records.json`の`audioUrl`、`label`と`PagePlayer`の背景画像は`imageUrl`、ノイズ音声は`assets/js/main.js`の`RECORD_NOISE_SOURCE`から取得します。音声は`fetch`と`decodeAudioData`でバックグラウンドロードし、正転・逆転用バッファを生成します。ノイズがOFFの場合はノイズ音声をロードしません。
 
-初回表示時はスプラッシュを表示します。`TAP TO START`のクリックでAudioContextをアンロックし、操作ロックを解除します。再生秒数、選択レコード、ノイズ同期状態はcookieへ保存します。
+初回表示時はスプラッシュを表示します。`TAP TO START`のクリックでAudioContextをアンロックし、操作ロックを解除します。再生秒数、選択レコード、ノイズ同期状態、ビジュアライザー描画状態はcookieへ保存します。
 
 ## 確認方法
 

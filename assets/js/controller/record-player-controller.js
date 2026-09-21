@@ -6,6 +6,10 @@ import {
     PlaybackPolicy,
 } from '../domain/playback-policy.js';
 
+// ビジュアライザー描画の線幅。
+const VISUALIZER_BAR_LINE_WIDTH = 4;
+const VISUALIZER_WAVEFORM_LINE_WIDTH = 2.5;
+
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
     constructor({ audioEngine, playbackService }) {
@@ -13,9 +17,11 @@ export class RecordPlayerController {
         this.audioEngine = audioEngine;
         this.playbackService = playbackService;
         // プレーヤー画面のDOM要素。
+        this.pagePlayer = document.querySelector('#PagePlayer');
         this.record = document.querySelector('#record');
         this.recordLabel = document.querySelector('#label, .label');
         this.noiseButton = document.querySelector('#noiseButton');
+        this.visualizerButton = document.querySelector('#visualizerButton');
         this.playbackX1Button = document.querySelector('#playbackX1Button');
         this.playbackSpeedReductionButton = document.querySelector('#PlaybackSpeedReductionButton, #PlaybackSpeedReduction');
         this.playbackSpeedIncrementButton = document.querySelector('#PlaybackSpeedIncrementButton, #PlaybackSpeedIncrement');
@@ -46,6 +52,7 @@ export class RecordPlayerController {
         this.audioTimeFrame = null;
         this.visualizerFrame = null;
         this.visualizerEnabled = true;
+        this.visualizerVisible = true;
         this.visualizerLayout = null;
         this.visualizerAccent = null;
         this.visualizerResizeObserver = null;
@@ -74,8 +81,10 @@ export class RecordPlayerController {
     /** DOMイベントとページ離脱時の保存処理を初期化する。 */
     initialize() {
         this.bindEvents();
-        const { noiseEnabled } = this.playbackService.getState();
+        const { noiseEnabled, visualizerEnabled } = this.playbackService.getState();
         this.updateNoiseButton(noiseEnabled);
+        this.setVisualizerEnabled(visualizerEnabled);
+        this.updateVisualizerButton(visualizerEnabled);
         this.playbackService.restore().then(({ noiseEnabled: restoredNoiseEnabled }) => {
             this.updateNoiseButton(restoredNoiseEnabled);
         }).catch(() => {});
@@ -103,10 +112,12 @@ export class RecordPlayerController {
         return this.audioEngine.setSource(sourceUrl, initialSeconds);
     }
 
-    /** レコード選択時にラベル背景画像を更新する。 */
-    setLabelImage(imageUrl) {
-        if (!this.recordLabel) return;
-        this.recordLabel.style.backgroundImage = imageUrl ? `url(${JSON.stringify(imageUrl)})` : '';
+    /** レコード選択時にlabelとPagePlayerの背景画像を更新する。 */
+    setRecordImage(imageUrl) {
+        const resolvedImageUrl = imageUrl ? new URL(imageUrl, document.baseURI).href : '';
+        const backgroundImage = resolvedImageUrl ? `url(${JSON.stringify(resolvedImageUrl)})` : '';
+        if (this.recordLabel) this.recordLabel.style.backgroundImage = backgroundImage;
+        this.pagePlayer?.style.setProperty('--record-image', backgroundImage || 'none');
     }
 
     /** 保存済みの再生秒数を取得する。 */
@@ -137,6 +148,7 @@ export class RecordPlayerController {
         this.record.addEventListener('lostpointercapture', (event) => this.releasePointer(event));
         this.record.addEventListener('keydown', (event) => this.handleKeyDown(event));
         this.noiseButton?.addEventListener('click', () => this.toggleNoise());
+        this.visualizerButton?.addEventListener('click', () => this.toggleVisualizer());
         this.playbackX1Button?.addEventListener('click', () => this.setManualPlaybackRate(1));
         this.playbackSpeedReductionButton?.addEventListener('click', () => this.adjustManualPlaybackRate(-0.1));
         this.playbackSpeedIncrementButton?.addEventListener('click', () => this.adjustManualPlaybackRate(0.1));
@@ -162,6 +174,20 @@ export class RecordPlayerController {
         if (!this.noiseButton) return;
         this.noiseButton.setAttribute('aria-pressed', String(enabled));
         this.noiseButton.classList.toggle('is-active', enabled);
+    }
+
+    /** ビジュアライザー設定を切り替え、描画状態とcookieを同期する。 */
+    toggleVisualizer() {
+        const enabled = this.playbackService.toggleVisualizer();
+        this.setVisualizerEnabled(enabled);
+        this.updateVisualizerButton(enabled);
+    }
+
+    /** ビジュアライザー設定ボタンのaria状態と表示状態を更新する。 */
+    updateVisualizerButton(enabled = this.visualizerEnabled) {
+        if (!this.visualizerButton) return;
+        this.visualizerButton.setAttribute('aria-pressed', String(enabled));
+        this.visualizerButton.classList.toggle('is-active', enabled);
     }
 
     /** 逆再生時のボタン状態と色を更新する。 */
@@ -311,26 +337,32 @@ export class RecordPlayerController {
 
     /** AnalyserNodeの周波数データを使ってビジュアライザーを描画する。 */
     updateVisualizer() {
-        if (!this.isAudioPlaying || !this.visualizerEnabled || document.hidden) {
+        if (!this.isAudioPlaying || !this.visualizerEnabled || !this.visualizerVisible || document.hidden) {
             this.clearVisualizer();
             return;
         }
         const data = this.audioEngine.getFrequencyData();
-        if (!data?.length || !this.visualizerContext) {
-            this.clearVisualizer();
+        const waveform = this.audioEngine.getTimeDomainData();
+        if (!data?.length || !waveform?.length || !this.visualizerContext) {
+            this.clearVisualizer(false);
+            this.scheduleVisualizer();
             return;
         }
         const layout = this.resizeVisualizerCanvas();
-        if (!layout) return;
+        if (!layout) {
+            this.scheduleVisualizer();
+            return;
+        }
         const { width, height, centerX, centerY, baseRadius } = layout;
         if (!this.visualizerAccent) this.visualizerAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#aaaaaa';
         const barAngle = (Math.PI * 2) / data.length;
         this.visualizerContext.clearRect(0, 0, width, height);
-        this.visualizerContext.lineWidth = 2;
+        this.visualizerContext.lineWidth = VISUALIZER_BAR_LINE_WIDTH;
         this.visualizerContext.lineCap = 'round';
         this.visualizerContext.strokeStyle = this.visualizerAccent;
         for (let index = 0; index < data.length; index += 1) {
-            const amplitude = data[index] / 255;
+            // 小さい音量の変化も視認できるよう、表示用の振幅を補正する。
+            const amplitude = Math.pow(data[index] / 255, 0.75);
             const angle = index * barAngle - Math.PI / 2;
             const outerRadius = baseRadius + 8 + amplitude * 52;
             this.visualizerContext.globalAlpha = 0.16 + amplitude * 0.55;
@@ -339,13 +371,29 @@ export class RecordPlayerController {
             this.visualizerContext.lineTo(centerX + Math.cos(angle) * outerRadius, centerY + Math.sin(angle) * outerRadius);
             this.visualizerContext.stroke();
         }
+        // 時間領域波形を外周へ描画し、音声波形の変化を直接反映する。
+        this.visualizerContext.beginPath();
+        for (let index = 0; index <= data.length; index += 1) {
+            const dataIndex = Math.min(waveform.length - 1, Math.floor((index / data.length) * waveform.length));
+            const waveAmplitude = (waveform[dataIndex] - 128) / 128;
+            const frequencyAmplitude = data[index % data.length] / 255;
+            const angle = (index / data.length) * Math.PI * 2 - Math.PI / 2;
+            const radius = baseRadius + 12 + waveAmplitude * 18 + frequencyAmplitude * 10;
+            const x = centerX + Math.cos(angle) * radius;
+            const y = centerY + Math.sin(angle) * radius;
+            if (index === 0) this.visualizerContext.moveTo(x, y);
+            else this.visualizerContext.lineTo(x, y);
+        }
+        this.visualizerContext.globalAlpha = 0.75;
+        this.visualizerContext.lineWidth = VISUALIZER_WAVEFORM_LINE_WIDTH;
+        this.visualizerContext.stroke();
         this.visualizerContext.globalAlpha = 1;
         this.scheduleVisualizer();
     }
 
     /** ビジュアライザーの次回描画を予約する。 */
     scheduleVisualizer() {
-        if (!this.visualizerEnabled || !this.isAudioPlaying || document.hidden || this.visualizerFrame !== null) return;
+        if (!this.visualizerEnabled || !this.visualizerVisible || !this.isAudioPlaying || document.hidden || this.visualizerFrame !== null) return;
         this.visualizerFrame = requestAnimationFrame(() => {
             this.visualizerFrame = null;
             this.updateVisualizer();
@@ -362,9 +410,20 @@ export class RecordPlayerController {
 
     /** ビジュアライザーの表示状態を切り替える。 */
     setVisualizerVisible(isVisible) {
-        this.visualizerEnabled = isVisible;
+        this.visualizerVisible = isVisible;
         this.invalidateVisualizer();
         if (!isVisible) this.clearVisualizer();
+    }
+
+    /** ユーザー設定に応じてビジュアライザーを有効化・無効化する。 */
+    setVisualizerEnabled(isEnabled) {
+        this.visualizerEnabled = Boolean(isEnabled);
+        this.setVisualizerVisible(this.visualizerEnabled);
+    }
+
+    /** 選択画面を閉じた後にユーザー設定どおりの表示状態へ戻す。 */
+    restoreVisualizerVisibility() {
+        this.setVisualizerVisible(this.visualizerEnabled);
     }
 
     /** 表示領域のサイズとレコード位置に合わせてキャンバスを調整する。 */
@@ -397,10 +456,12 @@ export class RecordPlayerController {
         return this.visualizerLayout;
     }
 
-    /** ビジュアライザーの描画ループを停止してキャンバスを消去する。 */
-    clearVisualizer() {
-        cancelAnimationFrame(this.visualizerFrame);
-        this.visualizerFrame = null;
+    /** ビジュアライザーの描画ループを必要に応じて停止し、キャンバスを消去する。 */
+    clearVisualizer(cancelFrame = true) {
+        if (cancelFrame) {
+            cancelAnimationFrame(this.visualizerFrame);
+            this.visualizerFrame = null;
+        }
         if (!this.visualizerContext) return;
         this.visualizerContext.save();
         this.visualizerContext.setTransform(1, 0, 0, 1, 0, 0);
@@ -419,11 +480,13 @@ export class RecordPlayerController {
             this.audioEngine.play().then(() => {
                 if (this.isAudioPlaying) {
                     cancelAnimationFrame(this.visualizerFrame);
+                    this.visualizerFrame = null;
                     this.updateVisualizer();
                 }
             });
             cancelAnimationFrame(this.audioTimeFrame);
             cancelAnimationFrame(this.visualizerFrame);
+            this.visualizerFrame = null;
             this.updateAudioTimeLoop();
             this.scheduleVisualizer();
         } else {

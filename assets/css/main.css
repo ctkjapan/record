@@ -133,7 +133,6 @@ body {
     inset: 0;
     display: grid;
     place-items: center;
-    padding: 24px;
     color: var(--white);
     background: var(--violet);
 
@@ -203,7 +202,7 @@ body {
       justify-content: center;
       align-items: center;
       gap: 8px;
-      background: rgba(48, 45, 93, .1);
+      background: rgba(48, 45, 93, .2);
       backdrop-filter: blur(1px);
       -webkit-backdrop-filter: blur(1px);
       overflow: hidden;
@@ -246,7 +245,8 @@ body {
         margin-bottom: 10px;
       }
 
-      .playback-speed-changer {
+      .playback-speed-changer,
+      .player-option {
         display: flex;
         justify-content: center;
         align-items: center;
@@ -254,11 +254,13 @@ body {
         margin-bottom: 10px;
       }
 
-      .noise-button:after {
+      .noise-button:after,
+      .visualizer-button:after {
         content: "OFF";
       }
 
-      .noise-button.is-active:after {
+      .noise-button.is-active:after,
+      .visualizer-button.is-active:after {
         content: "ON";
       }
 
@@ -280,7 +282,23 @@ body {
 
     #PagePlayer {
       position: relative;
-      background: rgba(0, 0, 0, .3);
+      background-color: rgba(0, 0, 0, .4);
+      overflow: hidden;
+
+      &::before {
+        content: "";
+        position: absolute;
+        top: -5%;
+        left: -5%;
+        height: 110%;
+        width: 110%;
+        background-image: var(--record-image, none);
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+        opacity: .4;
+        filter: blur(8px) grayscale();
+      }
 
       .hero {
         position: absolute;
