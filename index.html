@@ -5,13 +5,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#302d5d" />
-  <title>GROOVE RECORDS</title>
+  <title>VINYL</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/main.css?260920_7" />
+  <link rel="stylesheet" href="assets/css/main.css?260920_9" />
 </head>
 
 <body>
@@ -19,9 +19,8 @@
     aria-describedby="splashStatus">
     <div class="splash-content">
       <p class="splash-kicker">
-        <span class="wordmark" href="./" aria-label="GROOVE RECORDS ホーム">
+        <span class="wordmark">
           <span class="wordmark-mark" aria-hidden="true"></span>
-          <span>GROOVE<br />RECORDS</span>
         </span>
       </p>
       <h1 id="splashTitle">Put the needle on.</h1>
@@ -31,13 +30,20 @@
   </section>
 
   <header class="top-bar">
-    <a class="wordmark" href="./" aria-label="GROOVE RECORDS ホーム">
+    <button class="wordmark" id="menuButton" type="button" aria-label="メニューを開く" aria-controls="menuPanel"
+      aria-expanded="false">
       <span class="wordmark-mark" aria-hidden="true"></span>
-      <span>GROOVE<br />RECORDS</span>
-    </a>
-    <nav class="top-bar-actions">
-      <button class="button noise-button" id="noiseButton" type="button" aria-pressed="false">noise</button>
-      <button class="button change-button" id="changeButton" type="button" aria-pressed="false">COLLECTION</button>
+    </button>
+    <nav class="top-bar-actions" id="menuPanel" aria-label="メニュー" hidden>
+      <button class="button change-button close-menu" id="changeButton" type="button" aria-pressed="false">Choose
+        Vinyl</button>
+      <dic class="playback-speed-changer">
+        <button class="button" id="playbackX1Button" type="button">1.0</button>
+        <button class="button" id="PlaybackSpeedReduction" type="button">-0.1</button>
+        <button class="button" id="PlaybackSpeedIncrement" type="button">+0.1</button>
+        <button class="button" id="playbackReverse" type="button" aria-pressed="false">REVERSE</button>
+      </dic>
+      <button class="button noise-button" id="noiseButton" type="button" aria-pressed="false">NOISE </button>
     </nav>
   </header>
 
@@ -58,10 +64,10 @@
             aria-valuemax="360" aria-valuenow="0">
             <div class="grooves grooves-one"></div>
             <div class="grooves grooves-two"></div>
-            <div class="label">
-              <span class="label-small">GROOVE</span>
+            <div class="label" id="label">
+              <span class="label-small">VINYL</span>
               <strong id="labelNumber">001</strong>
-              <span class="label-small">STEREO</span>
+              <span class="label-small">RECORD</span>
             </div>
           </div>
         </div>
@@ -86,7 +92,7 @@
       <section id="pickerPanel" class="picker-panel" aria-label="レコードを変更" hidden>
         <div class="picker-heading">
           <div>
-            <h2>Choose<br />your record.</h2>
+            <h2>Choose<br />your vinyl.</h2>
           </div>
           <button class="button close-button" id="closePickerButton" type="button">BACK TO PLAYER</button>
         </div>

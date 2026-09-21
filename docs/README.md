@@ -1,4 +1,4 @@
-# GROOVE RECORDS 仕様書
+# VINYL 仕様書
 
 `index.html`で提供するインタラクティブなレコードプレーヤーの仕様です。
 
@@ -17,6 +17,7 @@
 | `index.html` | ページ構造、表示テキスト、操作対象、ARIA属性 |
 | `assets/js/main.js` | 依存関係の生成と初期化 |
 | `assets/js/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| `assets/js/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
 | `assets/js/record-player.js` | レコード回転、慣性、シーク、表示 |
 | `assets/js/record-picker.js` | レコード選択画面とレコード情報の更新 |
 | `assets/js/domain/` | レコードと一覧のドメインモデル |
@@ -30,7 +31,7 @@
 ## 基本情報
 
 - ページ言語：日本語（`lang="ja"`）
-- タイトル：`GROOVE RECORDS`
+- タイトル：`VINYL`
 - 初期表示レコード：cookie保存値、保存値がない場合は`001 P4D / Dance!`
 - レコード数：`assets/data/records.json`の定義数（現在9件）
 - 音声方式：Web Audio API（`fetch` → `decodeAudioData`）

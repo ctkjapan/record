@@ -1,4 +1,4 @@
-# GROOVE RECORDS
+# VINYL
 
 ブラウザ上でレコードを回転させて音楽を再生する、インタラクティブなレコードプレーヤーです。
 
@@ -12,6 +12,7 @@
 - 音声ロード中のレコードのモノクロ表示
 - 初回表示時のスプラッシュと音声再生許可
 - ノイズ音声の同期再生ON/OFFと状態のcookie保存
+- ヘッダーメニューの開閉
 - プルダウンリフレッシュと左右端の履歴スワイプの抑止
 - レスポンシブ表示と基本的なキーボードアクセシビリティ
 
@@ -30,6 +31,7 @@ python3 -m http.server 8000
 | 操作 | 動作 |
 | --- | --- |
 | `TAP TO START` | AudioContextを有効化して操作画面を開く |
+| `menuButton` | ヘッダーメニューを開閉。`Escape`で閉じる |
 | レコードをドラッグ | 回転・再生 |
 | ← / →キー | レコードを回転 |
 | `noise` | ノイズ音声の同期再生をON/OFF。状態はcookieへ保存 |
@@ -44,6 +46,7 @@ python3 -m http.server 8000
 | `index.html` | ページ構造、操作対象、ARIA属性 |
 | `assets/js/main.js` | DDD各層の依存関係を構成して初期化 |
 | `assets/js/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| `assets/js/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
 | `assets/js/record-player.js` | 回転、慣性、シーク、プレーヤー表示 |
 | `assets/js/record-picker.js` | レコード選択画面、表示情報の更新 |
 | `assets/js/domain/` | レコードと一覧のドメインモデル |

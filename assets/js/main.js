@@ -5,6 +5,7 @@ import { WebAudioEngine } from './infrastructure/web-audio-engine.js';
 import { RecordPickerController } from './record-picker.js';
 import { RecordPlayerController } from './record-player.js';
 import { SplashController } from './splash-controller.js';
+import { MenuController } from './menu-controller.js';
 
 // ブラウザの履歴スワイプと判定する画面端からの保護幅（px）。
 const EDGE_SWIPE_GUARD_PX = 32;
@@ -37,17 +38,21 @@ function preventMobileBrowserGestures() {
             const isBackSwipe = touchStartX <= EDGE_SWIPE_GUARD_PX && deltaX > 0;
             const isForwardSwipe = touchStartX >= window.innerWidth - EDGE_SWIPE_GUARD_PX && deltaX < 0;
             if (touchStartedAtEdge && Math.abs(deltaX) > Math.abs(deltaY) && (isBackSwipe || isForwardSwipe)) {
-                event.preventDefault();
+                if (event.cancelable) event.preventDefault();
                 return;
             }
             if (window.scrollY > 0) return;
-            if (deltaY > 0 && deltaY > Math.abs(deltaX)) event.preventDefault();
+            if (deltaY > 0 && deltaY > Math.abs(deltaX) && event.cancelable) event.preventDefault();
         },
         { passive: false },
     );
 }
 
 preventMobileBrowserGestures();
+
+// ヘッダーメニューの開閉Controllerを初期化する。
+const menuController = new MenuController();
+menuController.initialize();
 
 // レコード一覧JSONの公開URL。
 const RECORDS_LIST = '../data/records.json';

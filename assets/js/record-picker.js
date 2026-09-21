@@ -136,7 +136,7 @@ export class RecordPickerController {
         this.changeButton.textContent = 'SELECTING';
         this.changeButton.setAttribute('aria-pressed', 'true');
         this.setFocusedRecord(this.selectedRecordIndex);
-        requestAnimationFrame(() => this.pickerTrack.querySelector(`[data-record-index="${this.selectedRecordIndex}"]`)?.scrollIntoView({ behavior: 'instant', block: 'nearest', inline: 'center' }));
+        requestAnimationFrame(() => this.pickerTrack.querySelector(`[data-record-index="${this.selectedRecordIndex}"]`)?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' }));
     }
 
     /** 選択画面を閉じてプレーヤー画面へ戻る。 */
@@ -144,7 +144,7 @@ export class RecordPickerController {
         this.pickerPanel.hidden = true;
         this.playerPanel.hidden = false;
         this.pageBody.classList.remove('picker-open');
-        this.changeButton.textContent = 'COLLECTION';
+        this.changeButton.textContent = 'CHANGE VINYL';
         this.changeButton.setAttribute('aria-pressed', 'false');
     }
 

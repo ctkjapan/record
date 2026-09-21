@@ -30,7 +30,9 @@ export class PlaybackStateRepository {
 
     /** 音声ファイル上の再生秒数をcookieへ保存する。 */
     savePlaybackSeconds(seconds) {
-        this.writeCookie(PLAYBACK_SECONDS_COOKIE, String(Math.max(0, Number(seconds) || 0)));
+        const value = Number(seconds);
+        const safeSeconds = Number.isFinite(value) && value >= 0 ? value : 0;
+        this.writeCookie(PLAYBACK_SECONDS_COOKIE, String(safeSeconds));
     }
 
     /** ノイズ音声の同期再生状態をcookieへ保存する。 */
@@ -41,7 +43,12 @@ export class PlaybackStateRepository {
     /** 指定名のcookie値を読み込む。 */
     readCookie(name) {
         const cookie = document.cookie.split('; ').find((item) => item.startsWith(`${name}=`));
-        return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
+        if (!cookie) return null;
+        try {
+            return decodeURIComponent(cookie.slice(name.length + 1));
+        } catch {
+            return null;
+        }
     }
 
     /** cookie値をURLエンコードして保存する。 */

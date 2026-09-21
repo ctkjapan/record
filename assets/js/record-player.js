@@ -1,5 +1,6 @@
 // レコード回転から再生速度を計算するためのドメインルール設定。
-const ATTENUATION_RATE = 1;
+// 慣性回転をフレームごとに維持する割合。1のため回転速度を減衰させない。
+const MOMENTUM_PERSISTENCE_RATE = 1;
 const MIN_PLAYBACK_RATE = 0;
 const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_SMOOTHING = 0.1;
@@ -15,7 +16,12 @@ export class RecordPlayerController {
         this.playbackStateRepository = playbackStateRepository;
         // プレーヤー画面のDOM要素。
         this.record = document.querySelector('#record');
+        this.recordLabel = document.querySelector('#label, .label');
         this.noiseButton = document.querySelector('#noiseButton');
+        this.playbackX1Button = document.querySelector('#playbackX1Button');
+        this.playbackSpeedReductionButton = document.querySelector('#PlaybackSpeedReductionButton, #PlaybackSpeedReduction');
+        this.playbackSpeedIncrementButton = document.querySelector('#PlaybackSpeedIncrementButton, #PlaybackSpeedIncrement');
+        this.playbackReverseButton = document.querySelector('#playbackReverse');
         this.playState = document.querySelector('#playState');
         this.audioTime = document.querySelector('#audioTime');
         this.audioSeek = document.querySelector('#audioSeek');
@@ -35,6 +41,7 @@ export class RecordPlayerController {
         this.momentumFrame = null;
         this.playbackRateFrame = null;
         this.targetPlaybackRate = 0;
+        this.isManualPlaybackRate = false;
         this.isAudioPlaying = false;
         this.isSeeking = false;
         this.pendingSeekSeconds = 0;
@@ -46,6 +53,7 @@ export class RecordPlayerController {
         this.lastPlaybackRateLabel = '';
         this.lastPlayStateLabel = '';
         this.lastAudioBusyState = null;
+        this.lastRenderedRotation = null;
 
         // 音声エンジンからのロード状態を画面へ中継する。
         this.audioEngine.setCallbacks({
@@ -79,6 +87,7 @@ export class RecordPlayerController {
 
     /** 慣性回転・再生を停止し、現在の再生秒数を保存する。 */
     stop() {
+        this.isManualPlaybackRate = false;
         this.stopMomentum();
         this.updatePlaying(false);
         this.persistPlaybackSeconds(true);
@@ -90,8 +99,13 @@ export class RecordPlayerController {
         this.record.addEventListener('pointermove', (event) => this.handlePointerMove(event));
         this.record.addEventListener('pointerup', (event) => this.releasePointer(event));
         this.record.addEventListener('pointercancel', (event) => this.releasePointer(event));
+        this.record.addEventListener('lostpointercapture', (event) => this.releasePointer(event));
         this.record.addEventListener('keydown', (event) => this.handleKeyDown(event));
         this.noiseButton?.addEventListener('click', () => this.toggleNoise());
+        this.playbackX1Button?.addEventListener('click', () => this.setManualPlaybackRate(1));
+        this.playbackSpeedReductionButton?.addEventListener('click', () => this.adjustManualPlaybackRate(-0.1));
+        this.playbackSpeedIncrementButton?.addEventListener('click', () => this.adjustManualPlaybackRate(0.1));
+        this.playbackReverseButton?.addEventListener('click', () => this.togglePlaybackDirection());
         this.audioSeek.addEventListener('input', () => this.updateSeekPreview());
         this.audioSeek.addEventListener('change', () => this.commitSeek());
         this.audioSeek.addEventListener('keyup', (event) => {
@@ -108,7 +122,10 @@ export class RecordPlayerController {
                 this.playbackStateRepository.saveNoiseEnabled(this.audioEngine.isNoiseEnabled);
                 this.updateNoiseButton();
             })
-            .catch(() => this.updateNoiseButton());
+            .catch(() => {
+                this.playbackStateRepository.saveNoiseEnabled(false);
+                this.updateNoiseButton(false);
+            });
         this.updateNoiseButton(nextEnabled);
     }
 
@@ -121,15 +138,17 @@ export class RecordPlayerController {
 
     /** 現在秒数と総時間を表示し、シークバーの範囲を更新する。 */
     updateAudioTime() {
-        const seconds = this.isSeeking ? this.pendingSeekSeconds : this.audioEngine.getCurrentSeconds();
-        const nextLabel = `${this.formatTime(seconds)} / ${this.formatTime(this.audioEngine.duration)}`;
+        const duration = this.audioEngine.duration;
+        const currentSeconds = this.isSeeking ? this.pendingSeekSeconds : this.audioEngine.getCurrentSeconds();
+        const seconds = duration > 0 ? Math.min(currentSeconds, duration) : 0;
+        const nextLabel = `${this.formatTime(seconds)} / ${this.formatTime(duration)}`;
         if (nextLabel !== this.lastAudioTimeLabel) {
             this.audioTime.textContent = nextLabel;
             this.lastAudioTimeLabel = nextLabel;
         }
-        this.audioSeek.max = String(this.audioEngine.duration);
-        this.audioSeek.disabled = this.audioEngine.duration <= 0;
-        if (!this.isSeeking) this.audioSeek.value = String(Math.min(seconds, this.audioEngine.duration));
+        this.audioSeek.max = String(duration);
+        this.audioSeek.disabled = duration <= 0;
+        if (!this.isSeeking) this.audioSeek.value = String(seconds);
     }
 
     /** 現在の再生速度を画面へ表示する。 */
@@ -138,6 +157,61 @@ export class RecordPlayerController {
         if (nextLabel === this.lastPlaybackRateLabel) return;
         this.playbackRateValue.textContent = nextLabel;
         this.lastPlaybackRateLabel = nextLabel;
+    }
+
+    /** 再生速度を0〜2倍の範囲へ制限する。 */
+    clampPlaybackRate(rate) {
+        return Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, Number(rate) || 0));
+    }
+
+    /** ボタン操作で再生速度を即時設定し、回転操作まで設定値を維持する。 */
+    setManualPlaybackRate(rate) {
+        this.isManualPlaybackRate = true;
+        this.targetPlaybackRate = this.clampPlaybackRate(rate);
+        cancelAnimationFrame(this.playbackRateFrame);
+        this.playbackRateFrame = null;
+        this.audioEngine.setPlaybackRate(this.targetPlaybackRate);
+        this.updatePlaybackRateLabel();
+        this.syncRotationToPlaybackRate();
+        this.startPlaybackFromSpeedControl();
+    }
+
+    /** 現在の再生速度を指定量だけ増減する。 */
+    adjustManualPlaybackRate(delta) {
+        this.setManualPlaybackRate(this.audioEngine.playbackRate + delta);
+    }
+
+    /** 再生方向を切り替え、再生中の速度方向も同期する。 */
+    togglePlaybackDirection() {
+        const nextDirection = this.audioEngine.direction === 'reverse' ? 'forward' : 'reverse';
+        this.audioEngine.setDirection(nextDirection);
+        this.playbackReverseButton?.setAttribute('aria-pressed', String(nextDirection === 'reverse'));
+        this.syncRotationToPlaybackRate();
+        this.startPlaybackFromSpeedControl();
+    }
+
+    /** 再生速度をレコードの回転速度へ変換する。 */
+    getRotationSpeedPercentForPlaybackRate(rate) {
+        const normalizedRate = this.clampPlaybackRate(rate);
+        if (normalizedRate <= 1) return normalizedRate * MIN_CENTER;
+        return MAX_CENTER + ((normalizedRate - 1) / (MAX_PLAYBACK_RATE - 1)) * (100 - MAX_CENTER);
+    }
+
+    /** 設定済みの再生速度・方向をレコード回転へ同期する。 */
+    syncRotationToPlaybackRate() {
+        const speedPercent = this.getRotationSpeedPercentForPlaybackRate(this.audioEngine.playbackRate);
+        const direction = this.audioEngine.direction === 'reverse' ? -1 : 1;
+        this.velocity = (speedPercent / ROTATION_SPEED_SCALE) * direction;
+        this.setRotation(this.rotation + this.velocity);
+    }
+
+    /** 速度ボタン操作後に音声と慣性回転を開始する。 */
+    startPlaybackFromSpeedControl() {
+        if (this.audioEngine.playbackRate < MIN_PLAYBACK_RATE) return;
+        this.updatePlaying(true);
+        cancelAnimationFrame(this.momentumFrame);
+        this.momentumFrame = null;
+        if (this.velocity !== 0) this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
     }
 
     /** ロード中／再生中／待機中の状態表示とaria-busyを更新する。 */
@@ -315,6 +389,8 @@ export class RecordPlayerController {
 
     /** レコード操作を開始し、初期状態を記録する。 */
     handlePointerDown(event) {
+        if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        this.isManualPlaybackRate = false;
         this.stopMomentum();
         this.pointerId = event.pointerId;
         this.previousAngle = this.angleFromCenter(event);
@@ -343,14 +419,19 @@ export class RecordPlayerController {
         if (event.pointerId !== this.pointerId) return;
         this.pointerId = null;
         this.previousAngle = null;
-        if (Math.abs(this.velocity) > 0.02) this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
-        else this.updatePlaying(false);
+        if (event.type === 'pointerup' && Math.abs(this.velocity) > 0.02) {
+            this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
+            return;
+        }
+        this.stopMomentum();
+        this.updatePlaying(false);
     }
 
     /** 左右矢印キーによる回転操作を処理する。 */
     handleKeyDown(event) {
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
         event.preventDefault();
+        this.isManualPlaybackRate = false;
         const direction = event.key === 'ArrowRight' ? 1 : -1;
         this.velocity = direction * 2;
         this.setRotation(this.rotation + direction * 12);
@@ -359,7 +440,7 @@ export class RecordPlayerController {
         this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
     }
 
-    /** 回転速度を減衰させながら慣性回転を継続する。 */
+    /** 回転速度を維持しながら慣性回転を継続する。 */
     applyMomentum() {
         if (Math.abs(this.velocity) < 0.02) {
             this.stopMomentum();
@@ -367,7 +448,7 @@ export class RecordPlayerController {
             return;
         }
         this.setRotation(this.rotation + this.velocity);
-        this.velocity *= ATTENUATION_RATE;
+        this.velocity *= MOMENTUM_PERSISTENCE_RATE;
         this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
     }
 
@@ -384,13 +465,17 @@ export class RecordPlayerController {
     /** 回転角度、速度メーター、再生方向をまとめて更新する。 */
     setRotation(nextRotation) {
         this.rotation = nextRotation;
-        this.record.style.transform = `rotate(${this.rotation}deg)`;
+        const rotationStyle = `rotate(${this.rotation}deg)`;
+        if (this.recordLabel && this.lastRenderedRotation !== rotationStyle) {
+            this.recordLabel.style.transform = rotationStyle;
+            this.lastRenderedRotation = rotationStyle;
+        }
         const normalized = ((Math.round(this.rotation) % 360) + 360) % 360;
         this.angleValue.textContent = `${String(normalized).padStart(3, '0')}°`;
         this.record.setAttribute('aria-valuenow', normalized);
         const speedPercent = this.getRotationSpeedPercent();
         this.meterFill.style.width = `${speedPercent}%`;
-        this.targetPlaybackRate = this.getPlaybackRateForSpeed(speedPercent);
+        if (!this.isManualPlaybackRate) this.targetPlaybackRate = this.getPlaybackRateForSpeed(speedPercent);
         this.audioEngine.setDirection(this.velocity < 0 ? 'reverse' : this.velocity > 0 ? 'forward' : this.audioEngine.direction);
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }

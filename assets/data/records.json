@@ -52,5 +52,17 @@
     "title": "Official髭男dism / Pretender",
     "color": "#b97959",
     "audioUrl": "assets/mp3/Official髭男dism - Pretender.mp3"
+  },
+  {
+    "id": "010",
+    "title": "JSR / Let Mom Sleep",
+    "color": "#f2c61e",
+    "audioUrl": "assets/mp3/JSR - Let Mom Sleep.mp3"
+  },
+  {
+    "id": "011",
+    "title": "JSRF / Funky Dealer",
+    "color": "#9f928b",
+    "audioUrl": "assets/mp3/JSRF - Funky Dealer.mp3"
   }
 ]

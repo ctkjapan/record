@@ -34,6 +34,9 @@ export class WebAudioEngine {
         this.logicalSeconds = 0;
         this.direction = 'forward';
         this.isPlaying = false;
+        // 再生開始待ちの重複処理を無効化するための要求番号と待機状態。
+        this.playbackStartRequestId = 0;
+        this.isPlaybackStarting = false;
         // 音声ロード表示とユーザー操作のための状態。
         this.isLoading = false;
         this.audioLoadProgress = MIN_LOAD_PROGRESS;
@@ -63,6 +66,16 @@ export class WebAudioEngine {
     /** 音源URLが選択済みかを返す。 */
     get hasSource() {
         return Boolean(this.audioSourceUrl);
+    }
+
+    /** メイン音声と有効なノイズ音声の再生準備が完了しているかを返す。 */
+    isSourceReady() {
+        return Boolean(
+            this.audioBuffer
+            && this.reversedAudioBuffer
+            && this.duration > 0
+            && (!this.noiseEnabled || !this.noiseSourceUrl || this.noiseAudioBuffer),
+        );
     }
 
     /** ノイズ音声の同期再生が有効かを返す。 */
@@ -98,6 +111,8 @@ export class WebAudioEngine {
             return buffer;
         }
 
+        this.playbackStartRequestId += 1;
+        this.isPlaybackStarting = false;
         this.stopSource();
         this.abortLoading();
         this.audioSourceUrl = sourceUrl;
@@ -129,25 +144,35 @@ export class WebAudioEngine {
 
     /** AudioContextをアンロックし、音声バッファのロード後に再生を開始する。 */
     async play() {
-        if (!this.hasSource) return;
+        if (!this.hasSource || this.audioSource) return;
+        const requestId = ++this.playbackStartRequestId;
         this.isPlaying = true;
+        this.isPlaybackStarting = true;
+        // バッファが準備済みでもAudioContextの再開が遅れる場合があるため、開始完了までロード中にする。
+        this.setLoading(true, Math.min(this.audioLoadProgress, 99));
         try {
             await Promise.all([
                 this.unlock(),
                 this.loadAudioBuffer(),
                 this.noiseEnabled ? this.loadNoiseAudioBuffer() : Promise.resolve(null),
             ]);
-            if (this.isPlaying) this.startSource();
+            if (requestId === this.playbackStartRequestId && this.isPlaying) this.startSource();
         } catch (error) {
+            if (requestId !== this.playbackStartRequestId) return;
             this.isPlaying = false;
+            this.isPlaybackStarting = false;
+            if (this.isSourceReady()) this.completeLoading();
             this.onError(error);
         }
     }
 
     /** 再生状態を解除し、現在のAudioBufferSourceNodeを停止する。 */
     stop() {
+        this.playbackStartRequestId += 1;
         this.isPlaying = false;
+        this.isPlaybackStarting = false;
         this.stopSource();
+        if (this.isSourceReady()) this.completeLoading();
     }
 
     /** ノイズ音声の同期再生を切り替え、再生中なら現在位置から再構成する。 */
@@ -378,8 +403,8 @@ export class WebAudioEngine {
         if (!this.isPlaying || !this.audioBuffer || !this.reversedAudioBuffer || !this.audioContext || this.audioSource) return;
         const duration = this.duration;
         if (this.direction === 'reverse' && this.logicalSeconds <= 0) {
-            this.isPlaying = false;
-            return;
+            // 0秒地点から逆再生する場合は、音声末尾へ循環して再生を開始する。
+            this.logicalSeconds = duration;
         }
         const source = this.audioContext.createBufferSource();
         source.buffer = this.direction === 'reverse' ? this.reversedAudioBuffer : this.audioBuffer;
@@ -397,6 +422,7 @@ export class WebAudioEngine {
         const offset = this.direction === 'reverse' ? duration - this.logicalSeconds : this.logicalSeconds;
         source.start(0, Math.min(duration, Math.max(0, offset)));
         if (noiseSource) noiseSource.start(0, this.getNoiseOffset());
+        this.isPlaybackStarting = false;
         this.completeLoading();
     }
 
@@ -424,16 +450,18 @@ export class WebAudioEngine {
 
     /** 現在のAudioBufferSourceNodeを停止し、必要に応じて位置を同期する。 */
     stopSource(sync = true) {
-        if (!this.audioSource) return;
-        if (sync) this.syncCurrentSeconds();
+        if (!this.audioSource && !this.noiseSource) return;
+        if (sync && this.audioSource) this.syncCurrentSeconds();
         const source = this.audioSource;
         this.audioSource = null;
-        try {
-            source.stop();
-        } catch {
-            // 再生終了済みのソースは停止処理を不要とする。
+        if (source) {
+            try {
+                source.stop();
+            } catch {
+                // 再生終了済みのソースは停止処理を不要とする。
+            }
+            source.disconnect();
         }
-        source.disconnect();
         if (this.noiseSource) {
             try {
                 this.noiseSource.stop();
@@ -476,7 +504,11 @@ export class WebAudioEngine {
 
     /** 正転・逆転バッファの準備完了後にロードを完了状態へ切り替える。 */
     completeLoading() {
-        if (!this.audioBuffer || !this.reversedAudioBuffer || this.duration <= 0) return;
+        if (!this.isSourceReady()) return;
+        if (this.isPlaybackStarting && this.isPlaying) {
+            this.setLoading(true, 99);
+            return;
+        }
         this.setLoading(false, 100);
     }
 
