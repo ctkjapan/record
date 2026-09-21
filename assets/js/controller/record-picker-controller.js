@@ -227,7 +227,10 @@ export class RecordPickerController {
         this.selectedRecordIndex = index;
         const record = this.catalog.at(index);
         const isRecordChanged = this.playbackService.getState().recordId !== record.id;
-        if (isRecordChanged) this.playerController.stop();
+        if (isRecordChanged) {
+            this.playerController.stop();
+            this.playerController.resetRotation();
+        }
         const { initialSeconds } = this.playbackService.selectRecord(record);
         this.playerController.setAudioSource(record.audioUrl, initialSeconds).catch(() => {});
         this.playerController.setLabelImage(record.imageUrl);

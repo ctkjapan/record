@@ -122,6 +122,12 @@ export class RecordPlayerController {
         this.persistPlaybackSeconds(true);
     }
 
+    /** レコード変更時に表示回転を0度へ戻す。 */
+    resetRotation() {
+        this.previousAngle = null;
+        this.setRotation(0);
+    }
+
     /** レコード回転、シーク、キーボード操作のイベントを登録する。 */
     bindEvents() {
         this.record.addEventListener('pointerdown', (event) => this.handlePointerDown(event));
