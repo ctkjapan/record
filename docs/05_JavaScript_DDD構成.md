@@ -51,9 +51,9 @@ docs/
 | Domain | `assets/js/domain/record.js`、`record-catalog.js` | レコードと一覧のルール |
 | Domain | `assets/js/domain/record-selection.js`、`record-selection-policy.js` | フォーカス・確定選択状態とインデックス範囲、端循環ルール |
 | Domain | `assets/js/domain/playback-rate.js`、`playback-direction.js` | 再生速度・方向の値と切替ルール |
-| Domain | `assets/js/domain/playback-policy.js` | 回転速度と再生速度の変換、慣性設定 |
+| Domain | `assets/js/domain/playback-policy.js` | 回転角差・慣性しきい値の判定、角速度の時間正規化、再生速度との変換 |
 | Domain | `assets/js/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
-| Domain | `assets/js/domain/playback-timeline.js` | 再生位置を音源の長さ以内へ制限するルール |
+| Domain | `assets/js/domain/playback-timeline.js` | 再生位置の補正、ループ位置計算、副音源の方向・位相同期 |
 | Application | `assets/js/application/record-catalog-service.js` | レコード一覧のユースケース |
 | Application | `assets/js/application/record-selection-service.js` | 選択状態を初期化・更新しDomainルールを画面操作へ提供 |
 | Application | `assets/js/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
@@ -88,9 +88,11 @@ docs/
 
 - `record-player-controller.js`はDOMイベント、表示更新、アニメーション制御だけを担当する。
 - 再生速度の上限・下限、速度変更、方向反転、回転速度変換は`domain/`で扱う。
-- 再生位置の非負化と既知の音源長への制限は`PlaybackTimeline`へ集約し、画面と音声エンジンで共有する。
+- 再生位置の補正と、方向・速度・経過時間に基づくループ位置計算、副音源の方向・位相同期は`PlaybackTimeline`へ集約する。
+- 同じレコード再選択時の位置保持と別レコード選択時の位置初期化は`PlaybackSession`が決め、`PlaybackService`はその位置を音源へ渡す。
+- ビジュアライザー設定の反転は`PlaybackSession`が行い、`PlaybackService`は変更後の値を保存する。
 - レコード変更時の停止、再生位置の選択、音源切り替え、ノイズ状態の保存は`PlaybackService`で調停する。
-- 速度補間、回転方向から再生方向への変換、速度と回転割合の変換は`PlaybackPolicy`に集約する。
+- 角度境界での最短回転差補正、慣性の開始・停止しきい値、入力時間を正規化した角速度の算出、速度補間、回転方向から再生方向への変換、速度と回転割合の変換は`PlaybackPolicy`に集約する。
 - 先頭から右方向、末尾から左方向への循環先は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
 - 選択・フォーカス位置の状態遷移と有効範囲補正は`RecordSelection`へ集約し、Controllerは状態を画面表示へ反映する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。

@@ -12,9 +12,35 @@ export const ROTATION_SPEED_SCALE = 8;
 const MIN_CENTER_SPEED_PERCENT = 45;
 const MAX_CENTER_SPEED_PERCENT = 55;
 const PLAYBACK_RATE_SETTLING_THRESHOLD = 0.01;
+const ROTATION_VELOCITY_REFERENCE_FRAME_MS = 16;
+const MIN_ROTATION_SAMPLE_MS = 1;
+const ROTATION_MOMENTUM_THRESHOLD = 0.02;
 
 /** レコード回転と音声再生速度の変換ルールを提供するドメインサービス。 */
 export class PlaybackPolicy {
+    /** 円周上の角度差を最短方向の-180〜180度へ補正する。 */
+    static normalizeRotationDelta(delta) {
+        if (delta > 180) return delta - 360;
+        if (delta < -180) return delta + 360;
+        return delta;
+    }
+
+    /** 角度差を16ms基準の回転速度へ換算する。 */
+    static rotationVelocityFromDelta(delta, elapsedMilliseconds) {
+        const elapsed = Math.max(elapsedMilliseconds, MIN_ROTATION_SAMPLE_MS);
+        return (delta / elapsed) * ROTATION_VELOCITY_REFERENCE_FRAME_MS;
+    }
+
+    /** ポインター解放後に慣性を開始できる速度か判定する。 */
+    static shouldStartRotationMomentum(velocity) {
+        return Math.abs(velocity) > ROTATION_MOMENTUM_THRESHOLD;
+    }
+
+    /** 継続中の慣性速度が停止しきい値を下回ったか判定する。 */
+    static isRotationMomentumBelowThreshold(velocity) {
+        return Math.abs(velocity) < ROTATION_MOMENTUM_THRESHOLD;
+    }
+
     /** 音声再生速度をレコード回転の速度割合へ変換する。 */
     static rotationSpeedPercentFromRate(rate) {
         const normalizedRate = new PlaybackRate(rate).value;

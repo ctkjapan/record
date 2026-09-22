@@ -51,6 +51,11 @@ export class PlaybackSession {
         });
     }
 
+    /** ビジュアライザーの表示設定を反転した新しいセッションを返す。 */
+    toggleVisualizer() {
+        return this.withVisualizerEnabled(!this.visualizerEnabled);
+    }
+
     /** cookie保存用の単純な状態オブジェクトへ変換する。 */
     toSnapshot() {
         return {

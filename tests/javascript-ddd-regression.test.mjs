@@ -242,6 +242,29 @@ test('rotation keeps the previous forward, reverse, and zero-velocity directions
     assert.equal(PlaybackPolicy.directionFromRotationVelocity(0, 'invalid'), 'forward');
 });
 
+test('rotation delta follows the shortest path across the angle boundary', () => {
+    assert.equal(PlaybackPolicy.normalizeRotationDelta(350), -10);
+    assert.equal(PlaybackPolicy.normalizeRotationDelta(-350), 10);
+    assert.equal(PlaybackPolicy.normalizeRotationDelta(180), 180);
+    assert.equal(PlaybackPolicy.normalizeRotationDelta(-180), -180);
+});
+
+test('rotation velocity normalizes pointer angle changes to the 16ms frame interval', () => {
+    assert.equal(PlaybackPolicy.rotationVelocityFromDelta(8, 16), 8);
+    assert.equal(PlaybackPolicy.rotationVelocityFromDelta(8, 32), 4);
+    assert.equal(PlaybackPolicy.rotationVelocityFromDelta(-8, 16), -8);
+    assert.equal(PlaybackPolicy.rotationVelocityFromDelta(8, 0), 128);
+});
+
+test('rotation momentum uses the established start and stop threshold boundaries', () => {
+    assert.equal(PlaybackPolicy.shouldStartRotationMomentum(0.021), true);
+    assert.equal(PlaybackPolicy.shouldStartRotationMomentum(-0.021), true);
+    assert.equal(PlaybackPolicy.shouldStartRotationMomentum(0.02), false);
+    assert.equal(PlaybackPolicy.isRotationMomentumBelowThreshold(0.019), true);
+    assert.equal(PlaybackPolicy.isRotationMomentumBelowThreshold(-0.019), true);
+    assert.equal(PlaybackPolicy.isRotationMomentumBelowThreshold(0.02), false);
+});
+
 test('PlaybackDirection is an immutable value object with a valid reverse operation', () => {
     const invalidDirection = new PlaybackDirection('invalid');
     const reverseDirection = new PlaybackDirection('reverse');
@@ -277,18 +300,20 @@ test('RotationSpeedPercent enforces its finite 0 to 100 domain range', () => {
 test('playback session continues to normalize stored seconds and preserve settings on record change', () => {
     const session = new PlaybackSession({
         recordId: 'record-a',
-        playbackSeconds: -5,
+        playbackSeconds: 12.5,
         noiseEnabled: true,
         visualizerEnabled: false,
     });
 
-    assert.equal(session.playbackSeconds, 0);
+    assert.equal(session.playbackSeconds, 12.5);
+    assert.equal(session.selectRecord('record-a').playbackSeconds, 12.5);
     assert.deepEqual(session.selectRecord('record-b').toSnapshot(), {
         recordId: 'record-b',
         playbackSeconds: 0,
         noiseEnabled: true,
         visualizerEnabled: false,
     });
+    assert.equal(new PlaybackSession({ playbackSeconds: -5 }).playbackSeconds, 0);
 });
 
 test('PlaybackSeconds owns the finite non-negative playback position invariant', () => {
@@ -300,6 +325,19 @@ test('PlaybackSeconds owns the finite non-negative playback position invariant',
     assert.equal(new PlaybackSession({ playbackSeconds: -1 }).playbackSeconds, 0);
 });
 
+test('PlaybackSession toggles the visualizer preference without changing other session state', () => {
+    const session = new PlaybackSession({ recordId: 'record-a', playbackSeconds: 8, noiseEnabled: true, visualizerEnabled: true });
+    const nextSession = session.toggleVisualizer();
+
+    assert.equal(session.visualizerEnabled, true);
+    assert.deepEqual(nextSession.toSnapshot(), {
+        recordId: 'record-a',
+        playbackSeconds: 8,
+        noiseEnabled: true,
+        visualizerEnabled: false,
+    });
+});
+
 test('PlaybackTimeline constrains playback position to the known audio duration', () => {
     assert.equal(PlaybackTimeline.normalizePosition(12.5, 30), 12.5);
     assert.equal(PlaybackTimeline.normalizePosition(45, 30), 30);
@@ -307,6 +345,28 @@ test('PlaybackTimeline constrains playback position to the known audio duration'
     assert.equal(PlaybackTimeline.normalizePosition(Number.NaN, 30), 0);
     assert.equal(PlaybackTimeline.normalizePosition(45, 0), 45);
     assert.equal(PlaybackTimeline.normalizePosition(45, Number.NaN), 45);
+});
+
+test('PlaybackTimeline advances and wraps positions in forward and reverse directions', () => {
+    const timeline = (direction, startPosition, elapsedSeconds, playbackRate = 1) => PlaybackTimeline.positionAfter({
+        startPosition,
+        elapsedSeconds,
+        playbackRate,
+        direction,
+        duration: 30,
+    });
+
+    assert.equal(timeline('forward', 29, 2), 1);
+    assert.equal(timeline('reverse', 1, 2), 29);
+    assert.equal(timeline('forward', 4, 2, 0.5), 5);
+    assert.equal(timeline('reverse', 4, -2), 4);
+});
+
+test('PlaybackTimeline aligns a looping secondary track with the main playback direction', () => {
+    assert.equal(PlaybackTimeline.offsetForLoopingTrack(37, 8, 'forward'), 5);
+    assert.equal(PlaybackTimeline.offsetForLoopingTrack(37, 8, 'reverse'), 3);
+    assert.equal(PlaybackTimeline.offsetForLoopingTrack(32, 8, 'reverse'), 0);
+    assert.equal(PlaybackTimeline.offsetForLoopingTrack(12, 0, 'forward'), 0);
 });
 
 test('noise state persists on success and falls back to off on failure', async () => {

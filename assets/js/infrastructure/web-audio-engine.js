@@ -483,10 +483,7 @@ export class WebAudioEngine {
     /** メイン音源の秒数をノイズ音源のループ位置へ変換する。 */
     getNoiseOffset() {
         const duration = this.noiseAudioBuffer?.duration || 0;
-        if (duration <= 0) return 0;
-        const normalizedSeconds = ((this.logicalSeconds % duration) + duration) % duration;
-        if (this.direction !== PLAYBACK_DIRECTION_REVERSE || normalizedSeconds === 0) return normalizedSeconds;
-        return duration - normalizedSeconds;
+        return PlaybackTimeline.offsetForLoopingTrack(this.logicalSeconds, duration, this.direction);
     }
 
     /** 現在のAudioBufferSourceNodeを停止し、必要に応じて位置を同期する。 */
@@ -518,9 +515,13 @@ export class WebAudioEngine {
     syncCurrentSeconds() {
         if (!this.audioSource || !this.audioContext || this.duration <= 0) return;
         const elapsed = Math.max(0, this.audioContext.currentTime - this.audioSourceStartedAt);
-        const directionFactor = this.direction === PLAYBACK_DIRECTION_REVERSE ? -1 : 1;
-        const nextSeconds = this.audioSourceStartTime + elapsed * this.audioSourceRate * directionFactor;
-        this.logicalSeconds = ((nextSeconds % this.duration) + this.duration) % this.duration;
+        this.logicalSeconds = PlaybackTimeline.positionAfter({
+            startPosition: this.audioSourceStartTime,
+            elapsedSeconds: elapsed,
+            playbackRate: this.audioSourceRate,
+            direction: this.direction,
+            duration: this.duration,
+        });
     }
 
     /** 実行中の音声ロードをAbortControllerで中断する。 */

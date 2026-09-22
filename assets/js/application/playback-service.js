@@ -104,14 +104,13 @@ export class PlaybackService {
     /** レコード選択時の停止・状態保存・音源切り替えを調停する。 */
     selectRecord(record) {
         const isRecordChanged = this.session.recordId !== record.id;
-        const initialSeconds = this.session.recordId === record.id ? this.session.playbackSeconds : 0;
         if (isRecordChanged) {
             this.audioEngine.stop();
             this.savePlaybackSeconds(this.audioEngine.getCurrentSeconds());
         }
         this.session = this.session.selectRecord(record.id);
         this.playbackStateRepository.saveRecordId(record.id);
-        this.setAudioSource(record.audioUrl, initialSeconds).catch(() => {});
+        this.setAudioSource(record.audioUrl, this.session.playbackSeconds).catch(() => {});
         return { isRecordChanged };
     }
 
@@ -150,6 +149,22 @@ export class PlaybackService {
         return PlaybackPolicy.rotationSpeedPercentFromVelocity(velocity);
     }
 
+    normalizeRotationDelta(delta) {
+        return PlaybackPolicy.normalizeRotationDelta(delta);
+    }
+
+    rotationVelocityFromDelta(delta, elapsedMilliseconds) {
+        return PlaybackPolicy.rotationVelocityFromDelta(delta, elapsedMilliseconds);
+    }
+
+    shouldStartRotationMomentum(velocity) {
+        return PlaybackPolicy.shouldStartRotationMomentum(velocity);
+    }
+
+    isRotationMomentumBelowThreshold(velocity) {
+        return PlaybackPolicy.isRotationMomentumBelowThreshold(velocity);
+    }
+
     resolveDirectionFromRotation(velocity) {
         return PlaybackPolicy.directionFromRotationVelocity(velocity, this.audioEngine.direction);
     }
@@ -186,7 +201,7 @@ export class PlaybackService {
 
     /** ビジュアライザー描画状態を切り替え、cookieへ保存する。 */
     toggleVisualizer() {
-        this.session = this.session.withVisualizerEnabled(!this.session.visualizerEnabled);
+        this.session = this.session.toggleVisualizer();
         this.playbackStateRepository.saveVisualizerEnabled(this.session.visualizerEnabled);
         return this.session.visualizerEnabled;
     }

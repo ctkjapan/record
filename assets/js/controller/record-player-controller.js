@@ -562,12 +562,9 @@ export class RecordPlayerController {
     handlePointerMove(event) {
         if (event.pointerId !== this.pointerId) return;
         const currentAngle = this.angleFromCenter(event);
-        let delta = currentAngle - this.previousAngle;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
+        const delta = this.playbackService.normalizeRotationDelta(currentAngle - this.previousAngle);
         const now = performance.now();
-        const elapsed = Math.max(now - this.lastMoveTime, 1);
-        this.velocity = (delta / elapsed) * 16;
+        this.velocity = this.playbackService.rotationVelocityFromDelta(delta, now - this.lastMoveTime);
         this.setRotation(this.rotation + delta);
         this.previousAngle = currentAngle;
         this.lastMoveTime = now;
@@ -579,7 +576,7 @@ export class RecordPlayerController {
         this.pointerId = null;
         this.previousAngle = null;
         this.recordBounds = null;
-        if (event.type === 'pointerup' && Math.abs(this.velocity) > 0.02) {
+        if (event.type === 'pointerup' && this.playbackService.shouldStartRotationMomentum(this.velocity)) {
             this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
             return;
         }
@@ -602,7 +599,7 @@ export class RecordPlayerController {
 
     /** 回転速度を維持しながら慣性回転を継続する。 */
     applyMomentum() {
-        if (Math.abs(this.velocity) < 0.02) {
+        if (this.playbackService.isRotationMomentumBelowThreshold(this.velocity)) {
             this.stopMomentum();
             this.updatePlaying(false);
             return;

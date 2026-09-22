@@ -11,8 +11,8 @@ html {
 }
 
 :root {
-  --accent-color: rgb(170, 170, 170);
-  --disc-color: rgb(170, 170, 170);
+  --accent-color: #aaaaaa;
+  --disc-color: #aaaaaa;
   --rgb-white: 255 255 255;
   --rgb-black: 0 0 0;
   --rgb-gray: 51 51 51;
