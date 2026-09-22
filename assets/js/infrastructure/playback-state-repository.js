@@ -13,6 +13,10 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /** 選択状態、再生秒数、音声設定をcookieへ保存・復元するリポジトリ。 */
 export class PlaybackStateRepository {
+    constructor({ documentRef = globalThis.document } = {}) {
+        this.document = documentRef;
+    }
+
     /** cookieから再生状態を読み込み、異常値は初期値へ補正する。 */
     load() {
         const recordId = this.readCookie(RECORD_ID_COOKIE);
@@ -50,7 +54,7 @@ export class PlaybackStateRepository {
 
     /** 指定名のcookie値を読み込む。 */
     readCookie(name) {
-        const cookie = document.cookie.split('; ').find((item) => item.startsWith(`${name}=`));
+        const cookie = this.document.cookie.split('; ').find((item) => item.startsWith(`${name}=`));
         if (!cookie) return null;
         try {
             return decodeURIComponent(cookie.slice(name.length + 1));
@@ -61,6 +65,6 @@ export class PlaybackStateRepository {
 
     /** cookie値をURLエンコードして保存する。 */
     writeCookie(name, value) {
-        document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${COOKIE_MAX_AGE}; path=/; SameSite=Lax`;
+        this.document.cookie = `${name}=${encodeURIComponent(value)}; max-age=${COOKIE_MAX_AGE}; path=/; SameSite=Lax`;
     }
 }

@@ -1,15 +1,14 @@
-import { MIN_PLAYBACK_RATE } from '../domain/playback-rate.js';
-import { MOMENTUM_PERSISTENCE_RATE, PLAYBACK_RATE_SMOOTHING, ROTATION_SPEED_SCALE, PlaybackPolicy } from '../domain/playback-policy.js';
-
 // ビジュアライザー描画の線幅。
 const VISUALIZER_BAR_LINE_WIDTH = 4;
 const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
+// 回転操作の慣性と速度表示を調整する画面設定。
+const MOMENTUM_PERSISTENCE_RATE = 1;
+const ROTATION_SPEED_SCALE = 8;
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
-    constructor({ audioEngine, playbackService }) {
-        // 音声再生と保存処理を担当する依存オブジェクト。
-        this.audioEngine = audioEngine;
+    constructor({ playbackService }) {
+        // 再生ユースケースと状態を提供するアプリケーションサービス。
         this.playbackService = playbackService;
         // プレーヤー画面のDOM要素。
         this.pagePlayer = document.querySelector('#PagePlayer');
@@ -66,7 +65,7 @@ export class RecordPlayerController {
         this.lastRenderedRotation = null;
 
         // 音声エンジンからのロード状態を画面へ中継する。
-        this.audioEngine.setCallbacks({
+        this.playbackService.setAudioCallbacks({
             onLoadingProgress: (progress) => this.updateAudioLoadProgress(progress),
             onLoadingStateChange: (isLoading) => this.setLoadingState(isLoading),
             onError: (error) => this.handleAudioError(error),
@@ -107,7 +106,7 @@ export class RecordPlayerController {
 
     /** 音声エンジンへ音源URLと初期再生秒数を渡す。 */
     setAudioSource(sourceUrl, initialSeconds = 0) {
-        return this.audioEngine.setSource(sourceUrl, initialSeconds);
+        return this.playbackService.setAudioSource(sourceUrl, initialSeconds);
     }
 
     /** レコード選択時にlabelとPagePlayerの背景画像を更新する。 */
@@ -137,6 +136,18 @@ export class RecordPlayerController {
         this.setRotation(0);
     }
 
+    /** レコード変更時に画面側の再生・慣性状態を初期化する。 */
+    resetForRecordChange() {
+        this.isManualPlaybackRate = false;
+        this.stopMomentum();
+        this.isAudioPlaying = false;
+        this.pageBody.classList.remove('is-playing');
+        this.cancelPlaybackLoops();
+        this.resetRotation();
+        this.updatePlayState();
+        this.updateAudioTime();
+    }
+
     /** レコード回転、シーク、キーボード操作のイベントを登録する。 */
     bindEvents() {
         this.record.addEventListener('pointerdown', (event) => this.handlePointerDown(event));
@@ -160,7 +171,7 @@ export class RecordPlayerController {
 
     /** noiseボタンの状態を音声エンジンへ反映する。 */
     toggleNoise() {
-        const nextEnabled = !this.audioEngine.isNoiseEnabled;
+        const nextEnabled = !this.playbackService.audioState.isNoiseEnabled;
         this.updateNoiseButton(nextEnabled);
         this.playbackService
             .toggleNoise()
@@ -169,7 +180,7 @@ export class RecordPlayerController {
     }
 
     /** noiseボタンのaria状態と表示状態を更新する。 */
-    updateNoiseButton(enabled = this.audioEngine.isNoiseEnabled) {
+    updateNoiseButton(enabled = this.playbackService.audioState.isNoiseEnabled) {
         if (!this.noiseButton) return;
         this.noiseButton.setAttribute('aria-pressed', String(enabled));
         this.noiseButton.classList.toggle('is-active', enabled);
@@ -190,17 +201,17 @@ export class RecordPlayerController {
     }
 
     /** 逆再生時のボタン状態と色を更新する。 */
-    updatePlaybackDirectionButton(direction = this.audioEngine.direction) {
+    updatePlaybackDirectionButton(direction = this.playbackService.audioState.direction) {
         if (!this.playbackReverseButton) return;
-        const isReverse = direction === 'reverse';
+        const isReverse = (direction ?? this.playbackService.audioState.direction) === 'reverse';
         this.playbackReverseButton.setAttribute('aria-pressed', String(isReverse));
         this.playbackReverseButton.classList.toggle('is-active', isReverse);
     }
 
     /** 現在秒数と総時間を表示し、シークバーの範囲を更新する。 */
     updateAudioTime() {
-        const duration = this.audioEngine.duration;
-        const currentSeconds = this.isSeeking ? this.pendingSeekSeconds : this.audioEngine.getCurrentSeconds();
+        const { duration } = this.playbackService.audioState;
+        const currentSeconds = this.isSeeking ? this.pendingSeekSeconds : this.playbackService.getCurrentSeconds();
         const seconds = duration > 0 ? Math.min(currentSeconds, duration) : 0;
         const nextLabel = `${this.formatTime(seconds)} / ${this.formatTime(duration)}`;
         if (nextLabel !== this.lastAudioTimeLabel) {
@@ -226,7 +237,7 @@ export class RecordPlayerController {
 
     /** 現在の再生速度を画面へ表示する。 */
     updatePlaybackRateLabel() {
-        const nextLabel = `${this.audioEngine.playbackRate.toFixed(2)}x`;
+        const nextLabel = `${this.playbackService.audioState.playbackRate.toFixed(2)}x`;
         if (nextLabel === this.lastPlaybackRateLabel) return;
         this.playbackRateValue.textContent = nextLabel;
         this.lastPlaybackRateLabel = nextLabel;
@@ -264,20 +275,21 @@ export class RecordPlayerController {
 
     /** 再生速度をレコードの回転速度へ変換する。 */
     getRotationSpeedPercentForPlaybackRate(rate) {
-        return PlaybackPolicy.rotationSpeedPercentFromRate(rate);
+        return this.playbackService.rotationSpeedPercentFromRate(rate);
     }
 
     /** 設定済みの再生速度・方向をレコード回転へ同期する。 */
     syncRotationToPlaybackRate() {
-        const speedPercent = this.getRotationSpeedPercentForPlaybackRate(this.audioEngine.playbackRate);
-        const direction = this.audioEngine.direction === 'reverse' ? -1 : 1;
+        const { playbackRate, direction: playbackDirection } = this.playbackService.audioState;
+        const speedPercent = this.getRotationSpeedPercentForPlaybackRate(playbackRate);
+        const direction = playbackDirection === 'reverse' ? -1 : 1;
         this.velocity = (speedPercent / ROTATION_SPEED_SCALE) * direction;
         this.setRotation(this.rotation + this.velocity);
     }
 
     /** 速度ボタン操作後に音声と慣性回転を開始する。 */
     startPlaybackFromSpeedControl() {
-        if (this.audioEngine.playbackRate < MIN_PLAYBACK_RATE) return;
+        if (!this.playbackService.isCurrentRatePlayable()) return;
         this.updatePlaying(true);
         cancelAnimationFrame(this.momentumFrame);
         this.momentumFrame = null;
@@ -286,12 +298,13 @@ export class RecordPlayerController {
 
     /** ロード中／再生中／待機中の状態表示とaria-busyを更新する。 */
     updatePlayState() {
-        const nextLabel = this.audioEngine.isLoading ? `LOADING AUDIO ${this.audioEngine.audioLoadProgress}%` : this.isAudioPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
+        const { isLoading, audioLoadProgress } = this.playbackService.audioState;
+        const nextLabel = isLoading ? `LOADING AUDIO ${audioLoadProgress}%` : this.isAudioPlaying ? 'NOW SPINNING' : 'READY TO SPIN';
         if (nextLabel !== this.lastPlayStateLabel) {
             this.playState.textContent = nextLabel;
             this.lastPlayStateLabel = nextLabel;
         }
-        const nextBusyState = String(this.audioEngine.isLoading);
+        const nextBusyState = String(isLoading);
         if (nextBusyState !== this.lastAudioBusyState) {
             this.record.setAttribute('aria-busy', nextBusyState);
             this.lastAudioBusyState = nextBusyState;
@@ -323,7 +336,7 @@ export class RecordPlayerController {
 
     /** 再生中の現在秒数とcookie保存をアニメーションフレームごとに更新する。 */
     updateAudioTimeLoop() {
-        if (!this.isAudioPlaying || !this.audioEngine.isPlaying) {
+        if (!this.isAudioPlaying || !this.playbackService.audioState.isPlaying) {
             this.isAudioPlaying = false;
             this.updatePlayState();
             this.audioTimeFrame = null;
@@ -340,8 +353,8 @@ export class RecordPlayerController {
             this.clearVisualizer();
             return;
         }
-        const data = this.audioEngine.getFrequencyData();
-        const waveform = this.audioEngine.getTimeDomainData();
+        const data = this.playbackService.getFrequencyData();
+        const waveform = this.playbackService.getTimeDomainData();
         if (!data?.length || !waveform?.length || !this.visualizerContext) {
             this.clearVisualizer(false);
             this.scheduleVisualizer();
@@ -470,13 +483,14 @@ export class RecordPlayerController {
 
     /** 再生開始／停止を音声エンジンと画面状態へ反映する。 */
     updatePlaying(isPlaying) {
-        if (isPlaying && !this.audioEngine.hasSource) return;
+        const { hasSource, duration } = this.playbackService.audioState;
+        if (isPlaying && !hasSource) return;
         this.isAudioPlaying = isPlaying;
         this.pageBody.classList.toggle('is-playing', isPlaying);
         this.updatePlayState();
         if (isPlaying) {
-            if (this.audioEngine.duration > 0 && this.audioEngine.getCurrentSeconds() >= this.audioEngine.duration) this.audioEngine.seek(0);
-            this.audioEngine.play().then(() => {
+            if (duration > 0 && this.playbackService.getCurrentSeconds() >= duration) this.playbackService.seek(0);
+            this.playbackService.play().then(() => {
                 if (this.isAudioPlaying) {
                     cancelAnimationFrame(this.visualizerFrame);
                     this.visualizerFrame = null;
@@ -489,7 +503,7 @@ export class RecordPlayerController {
             this.updateAudioTimeLoop();
             this.scheduleVisualizer();
         } else {
-            this.audioEngine.stop();
+            this.playbackService.stop();
             this.cancelPlaybackLoops();
             this.updateAudioTime();
         }
@@ -506,10 +520,11 @@ export class RecordPlayerController {
 
     /** シークバー操作中の仮の再生秒数を更新する。 */
     updateSeekPreview() {
-        if (this.audioEngine.duration <= 0) return;
+        const { duration } = this.playbackService.audioState;
+        if (duration <= 0) return;
         this.isSeeking = true;
-        this.pendingSeekSeconds = Math.max(0, Math.min(this.audioEngine.duration, Number(this.audioSeek.value)));
-        this.audioEngine.previewSeek(this.pendingSeekSeconds);
+        this.pendingSeekSeconds = Math.max(0, Math.min(duration, Number(this.audioSeek.value)));
+        this.playbackService.previewSeek(this.pendingSeekSeconds);
         this.updateAudioTime();
         this.persistPlaybackSeconds();
     }
@@ -517,7 +532,7 @@ export class RecordPlayerController {
     /** シーク操作を確定し、指定秒数から再生を再構成する。 */
     commitSeek() {
         if (!this.isSeeking) return;
-        this.audioEngine.seek(this.pendingSeekSeconds);
+        this.playbackService.seek(this.pendingSeekSeconds);
         this.isSeeking = false;
         this.updateAudioTime();
         this.persistPlaybackSeconds(true);
@@ -528,7 +543,7 @@ export class RecordPlayerController {
         const now = Date.now();
         if (!force && now - this.lastPlaybackCookieSaveAt < 500) return;
         this.lastPlaybackCookieSaveAt = now;
-        const seconds = this.isSeeking ? this.pendingSeekSeconds : this.audioEngine.getCurrentSeconds();
+        const seconds = this.isSeeking ? this.pendingSeekSeconds : this.playbackService.getCurrentSeconds();
         this.playbackService.savePlaybackSeconds(seconds);
     }
 
@@ -606,7 +621,7 @@ export class RecordPlayerController {
         this.velocity = 0;
         this.meterFill.style.width = '0%';
         this.lastMeterWidth = '0%';
-        this.targetPlaybackRate = MIN_PLAYBACK_RATE;
+        this.targetPlaybackRate = this.playbackService.minimumPlaybackRate;
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }
 
@@ -632,9 +647,10 @@ export class RecordPlayerController {
             this.lastMeterWidth = nextMeterWidth;
         }
         if (!this.isManualPlaybackRate) this.targetPlaybackRate = this.getPlaybackRateForSpeed(speedPercent);
-        const nextDirection = this.velocity < 0 ? 'reverse' : this.velocity > 0 ? 'forward' : this.audioEngine.direction;
-        if (nextDirection !== this.audioEngine.direction) {
-            this.audioEngine.setDirection(nextDirection);
+        const currentDirection = this.playbackService.audioState.direction;
+        const nextDirection = this.playbackService.resolveDirectionFromRotation(this.velocity);
+        if (nextDirection !== currentDirection) {
+            this.playbackService.setDirection(nextDirection);
             this.updatePlaybackDirectionButton(nextDirection);
         }
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
@@ -642,15 +658,12 @@ export class RecordPlayerController {
 
     /** 目標再生速度へ滑らかに近づける。 */
     updatePlaybackRate() {
-        const difference = this.targetPlaybackRate - this.audioEngine.playbackRate;
-        if (Math.abs(difference) < 0.01) {
-            this.playbackService.setPlaybackRate(this.targetPlaybackRate);
-            this.updatePlaybackRateLabel();
+        const { isSettled } = this.playbackService.approachPlaybackRate(this.targetPlaybackRate);
+        this.updatePlaybackRateLabel();
+        if (isSettled) {
             this.playbackRateFrame = null;
             return;
         }
-        this.playbackService.setPlaybackRate(this.audioEngine.playbackRate + difference * PLAYBACK_RATE_SMOOTHING);
-        this.updatePlaybackRateLabel();
         this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
     }
 
@@ -669,7 +682,7 @@ export class RecordPlayerController {
 
     /** 回転速度の割合をWeb Audioの再生速度へ変換する。 */
     getPlaybackRateForSpeed(speedPercent) {
-        return PlaybackPolicy.rateFromRotationSpeedPercent(speedPercent);
+        return this.playbackService.rateFromRotationSpeedPercent(speedPercent);
     }
 
     /** 秒数を画面表示用のmm:ssまたはhh:mm:ssへ変換する。 */

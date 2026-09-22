@@ -9,6 +9,7 @@
 - [レコード選択](03_レコード選択.md)
 - [レスポンシブ・アクセシビリティ](04_レスポンシブとアクセシビリティ.md)
 - [JavaScript DDD構成](05_JavaScript_DDD構成.md)
+- [JavaScript DDD回帰テスト](06_JavaScript_DDD回帰テスト.md)
 
 ## 対象ファイル
 
@@ -16,6 +17,7 @@
 | --- | --- |
 | `index.html` | ページ構造、表示テキスト、操作対象、ARIA属性 |
 | `assets/js/main.js` | 依存関係の生成と初期化 |
+| `assets/js/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
 | `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | `assets/js/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
 | `assets/js/controller/record-player-controller.js` | レコード回転、慣性、シーク、表示、ラベル背景画像 |

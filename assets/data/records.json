@@ -82,5 +82,12 @@
     "color": "#13ff26",
     "audioUrl": "assets/mp3/米津玄師 - Plazma.mp3",
     "imageUrl": "assets/images/米津玄師 - Plazma.jpg"
+  },
+  {
+    "id": "013",
+    "title": "田中マイミ / Miracle Shopping 〜ドン・キホーテのテーマ〜",
+    "color": "#ffff04",
+    "audioUrl": "assets/mp3/田中マイミ - Miracle Shopping 〜ドン・キホーテのテーマ〜.mp3",
+    "imageUrl": "assets/images/田中マイミ - Miracle Shopping 〜ドン・キホーテのテーマ〜.webp"
   }
 ]

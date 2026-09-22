@@ -14,6 +14,7 @@ assets/
 ├── js/
 │   ├── main.js
 │   ├── controller/
+│   │   ├── browser-interaction-controller.js
 │   │   ├── menu-controller.js
 │   │   ├── splash-controller.js
 │   │   ├── record-player-controller.js
@@ -52,6 +53,7 @@ docs/
 | Infrastructure | `assets/js/infrastructure/playback-state-repository.js` | cookie保存・復元 |
 | Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
 | Presentation | `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| Presentation | `assets/js/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
 | Presentation | `assets/js/controller/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
 | Presentation | `assets/js/controller/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
 | Presentation | `assets/js/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
@@ -60,15 +62,15 @@ docs/
 
 ## 依存方向
 
-画面Controllerはドメインルールやcookie実装を直接持たず、`PlaybackService`と`RecordCatalogService`を`main.js`から注入します。`PlaybackService`は音声ポートと状態保存ポートを調停し、ControllerはDOM表示と入力イベントに集中します。`window.RecordPlayer`は既存の選択処理との互換Facadeとして`main.js`で公開します。ブラウザのタッチジェスチャー制御も`main.js`で初期化します。
+画面Controllerはドメインルール、cookie実装、Web Audio実装に直接依存せず、`PlaybackService`と`RecordCatalogService`を`main.js`から注入します。`PlaybackService`は音声エンジンと状態保存リポジトリを調停し、Controllerへ音声状態の読み取りと操作を提供します。`BrowserInteractionController`がページ復元とブラウザー操作の抑止を担当し、`SplashController`の音声有効化も`PlaybackService`経由にします。Composition Rootの`main.js`は各Controllerとサービスの生成・配線を担います。`window.RecordPlayer`は既存の選択処理との互換Facadeとして`main.js`で公開します。
 
 ## データの流れ
 
 1. `main.js`がcookieリポジトリ、Web Audio、アプリケーションサービス、各Controllerを生成する。
-2. `SplashController`がスプラッシュを表示し、初回クリックでAudioContextをアンロックする。
+2. `SplashController`がスプラッシュを表示し、初回クリックで`PlaybackService`へ音声有効化を依頼する。
 3. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
 4. `RecordCatalogService`が`RecordCatalog`を生成する。
-5. `RecordPickerController`が`PlaybackService`へレコード選択を依頼し、選択レコードの`audioUrl`を`RecordPlayerController`へ渡す。
+5. `RecordPickerController`が`PlaybackService`へレコード選択ユースケースを依頼し、サービスが必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
 6. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
 7. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
 8. `PlaybackService`が`PlaybackSession`を更新し、`PlaybackStateRepository`へレコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態の保存を依頼する。
@@ -77,7 +79,8 @@ docs/
 
 - `record-player-controller.js`はDOMイベント、表示更新、アニメーション制御だけを担当する。
 - 再生速度の上限・下限、速度変更、方向反転、回転速度変換は`domain/`で扱う。
-- レコード変更時の停止、再生位置の選択、ノイズ状態の保存は`PlaybackService`で調停する。
+- レコード変更時の停止、再生位置の選択、音源切り替え、ノイズ状態の保存は`PlaybackService`で調停する。
+- 速度補間、回転方向から再生方向への変換、速度と回転割合の変換は`PlaybackPolicy`に集約する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。
 
 ## cookie

@@ -1,0 +1,31 @@
+# JavaScript DDD回帰テスト
+
+## 目的
+
+DDDへの段階的な整理で、レコード再選択、再生位置の保存、速度変更、回転方向、音声設定の既存動作を保てているか確認します。また、依存方向を検査して層の逆流を防ぎます。
+
+## 実行
+
+プロジェクトルートで実行します。
+
+```sh
+node --test tests/javascript-ddd-regression.test.mjs
+for file in $(rg --files assets/js -g '*.js'); do node --check "$file" || exit 1; done
+git diff --check
+```
+
+## 対象
+
+- 別レコード選択時の停止、再生秒数保存、秒数初期化、音源読み込み
+- 同じレコード再選択時の再生位置維持
+- 再生速度の補間係数と収束しきい値
+- 回転速度から再生方向への変換
+- 再生セッション値の補正と設定維持
+- ノイズ設定の成功時保存と失敗時OFFへの復帰
+- ページ復元時のリロード、履歴スワイプ・pull-to-refresh抑止、長押し・ドラッグ抑止
+- スプラッシュ起動成功時のロック解除と音声有効化失敗時の再試行表示
+- JSON Repositoryのno-store取得、Domainモデルへの変換、HTTP・形式エラー
+- cookie Repositoryの旧値fallback、異常値補正、保存・URLエンコード
+- Domain、Application、Controller間の依存方向
+
+ブラウザー、実端末、音声デバイスを使った手動確認は、このNodeテストの対象外です。

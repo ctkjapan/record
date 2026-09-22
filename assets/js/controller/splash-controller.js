@@ -1,20 +1,21 @@
 /** 初回操作で音声を有効化し、アプリ画面の操作ロックを解除するController。 */
 export class SplashController {
-    constructor({ audioEngine }) {
-        // ユーザー操作でアンロックする音声エンジン。
-        this.audioEngine = audioEngine;
+    constructor({ playbackService, documentRef = document }) {
+        // 音声有効化のユースケースを担当するアプリケーションサービス。
+        this.playbackService = playbackService;
+        this.document = documentRef;
         // スプラッシュ画面と開始ボタンのDOM要素。
-        this.splashScreen = document.querySelector('#splashScreen');
-        this.startButton = document.querySelector('#splashStartButton');
-        this.splashStatus = document.querySelector('#splashStatus');
+        this.splashScreen = this.document.querySelector('#splashScreen');
+        this.startButton = this.document.querySelector('#splashStartButton');
+        this.splashStatus = this.document.querySelector('#splashStatus');
         // スプラッシュ表示中に操作を制限するアプリ領域。
-        this.lockedElements = [document.querySelector('header'), document.querySelector('main')];
+        this.lockedElements = [this.document.querySelector('header'), this.document.querySelector('main')];
     }
 
     /** スプラッシュを表示し、開始操作を登録する。 */
     initialize() {
         if (!this.splashScreen || !this.startButton) return;
-        document.body.classList.add('is-splash-visible');
+        this.document.body.classList.add('is-splash-visible');
         this.setApplicationLocked(true);
         this.startButton.addEventListener('click', () => this.startApplication());
         this.startButton.focus({ preventScroll: true });
@@ -26,7 +27,7 @@ export class SplashController {
         this.startButton.disabled = true;
         this.splashStatus.textContent = 'STARTING...';
         try {
-            await this.audioEngine.unlock();
+            await this.playbackService.activateAudio();
             this.setApplicationLocked(false);
             this.splashScreen.hidden = true;
             this.startButton.disabled = false;
@@ -42,6 +43,6 @@ export class SplashController {
             if (!element) return;
             element.toggleAttribute('inert', isLocked);
         });
-        document.body.classList.toggle('is-splash-visible', isLocked);
+        this.document.body.classList.toggle('is-splash-visible', isLocked);
     }
 }

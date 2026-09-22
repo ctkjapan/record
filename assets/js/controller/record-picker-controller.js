@@ -222,17 +222,12 @@ export class RecordPickerController {
         this.pickerStatus.textContent = this.focusedRecordIndex === this.selectedRecordIndex ? '中央のレコードをクリックして選択' : `${this.records[this.focusedRecordIndex].title} をクリックして変更`;
     }
 
-    /** レコードを選択し、音源・cookie・タイトル表示を同期する。 */
+    /** レコード選択ユースケースを実行し、選択画面の表示を同期する。 */
     selectRecord(index) {
         this.selectedRecordIndex = index;
         const record = this.catalog.at(index);
-        const isRecordChanged = this.playbackService.getState().recordId !== record.id;
-        if (isRecordChanged) {
-            this.playerController.stop();
-            this.playerController.resetRotation();
-        }
-        const { initialSeconds } = this.playbackService.selectRecord(record);
-        this.playerController.setAudioSource(record.audioUrl, initialSeconds).catch(() => {});
+        const { isRecordChanged } = this.playbackService.selectRecord(record);
+        if (isRecordChanged) this.playerController.resetForRecordChange();
         this.playerController.setRecordImage(record.imageUrl);
         document.documentElement.style.setProperty('--accent', record.color);
         this.albumNumber.textContent = String(index + 1).padStart(2, '0');

@@ -48,6 +48,7 @@ python3 -m http.server 8000
 | --- | --- |
 | `index.html` | ページ構造、操作対象、ARIA属性 |
 | `assets/js/main.js` | DDD各層の依存関係を構成して初期化 |
+| `assets/js/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
 | `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | `assets/js/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
 | `assets/js/controller/record-player-controller.js` | 回転、慣性、シーク、プレーヤー表示 |
@@ -71,8 +72,9 @@ Web Audio APIを使用します。レコード音声は`assets/data/records.json
 ## 確認方法
 
 ```sh
-for file in $(rg --files assets/js); do node --check "$file"; done
+node --test tests/javascript-ddd-regression.test.mjs
+for file in $(rg --files assets/js -g '*.js'); do node --check "$file" || exit 1; done
 git diff --check
 ```
 
-詳細は[docs/README.md](docs/README.md)から機能別の仕様書を参照してください。
+回帰テストの対象は[JavaScript DDD回帰テスト](docs/06_JavaScript_DDD回帰テスト.md)、仕様書一覧は[docs/README.md](docs/README.md)を参照してください。
