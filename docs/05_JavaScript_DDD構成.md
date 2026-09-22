@@ -44,7 +44,7 @@ docs/
 | Domain | `src/domain/playback-policy.js` | 回転角差・慣性しきい値の判定、角速度の時間正規化、再生速度との変換 |
 | Domain | `src/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
 | Domain | `src/domain/playback-timeline.js` | 再生位置の補正、ループ位置計算、副音源の方向・位相同期 |
-| Application | `src/application/record-catalog-service.js` | レコード一覧のユースケース |
+| Application | `src/application/record-catalog-service.js` | レコード一覧の読み込みと集約への問い合わせ |
 | Application | `src/application/record-selection-service.js` | 選択状態を初期化・更新しDomainルールを画面操作へ提供 |
 | Application | `src/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
 | Infrastructure | `src/infrastructure/record-json-repository.js` | JSON取得 |
@@ -70,7 +70,7 @@ Presentation Controllerはドメインルール、cookie実装、Web Audio実装
 2. Reactの初回描画後、`src/composition-root.js`がcookieリポジトリ、Web Audio、アプリケーションサービス、各Controllerを生成する。
 3. `SplashController`がスプラッシュを表示し、初回クリックで`PlaybackService`へ音声有効化を依頼する。
 4. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
-5. `RecordCatalogService`が`RecordCatalog`を生成する。
+5. `RecordCatalogService`が`RecordCatalog`を生成して内部に保持し、Presentation向けにレコード配列とID・位置による問い合わせを提供する。
 6. `RecordPickerController`が`PlaybackService`へレコード選択ユースケースを依頼し、サービスが必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
    フォーカス位置と確定選択位置は`RecordSelection`が保持し、端循環先とインデックス範囲は`RecordSelectionPolicy`が決定する。
 7. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
@@ -86,9 +86,10 @@ Presentation Controllerはドメインルール、cookie実装、Web Audio実装
 - ビジュアライザー設定の反転は`PlaybackSession`が行い、`PlaybackService`は変更後の値を保存する。
 - レコード変更時の停止、再生位置の選択、音源切り替え、ノイズ状態の保存は`PlaybackService`で調停する。
 - 角度境界での最短回転差補正、慣性の開始・停止しきい値、入力時間を正規化した角速度の算出、速度補間、回転方向から再生方向への変換、速度と回転割合の変換は`PlaybackPolicy`に集約する。
-- 先頭から右方向、末尾から左方向への循環先は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
+- 選択画面の端循環とプレーヤー画面からの隣接レコード循環は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
 - 選択・フォーカス位置の状態遷移と有効範囲補正は`RecordSelection`へ集約し、Controllerは状態を画面表示へ反映する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。
+- `RecordCatalog`集約は`RecordCatalogService`内に保持し、Presentation Controllerは集約の検索・取得をサービス経由で行う。
 - ReactコンポーネントはCSSとPresentation Controllerが参照するDOM ID・ARIA属性を維持する。DOMイベントを扱うControllerはReact描画後の画面ブリッジとして初期化する。
 
 ## cookie

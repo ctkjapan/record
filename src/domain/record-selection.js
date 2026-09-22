@@ -34,6 +34,11 @@ export class RecordSelection {
         return this.toSnapshot();
     }
 
+    /** 確定選択位置から左右の隣接レコード位置を求める。 */
+    adjacentIndex(direction) {
+        return RecordSelectionPolicy.adjacentIndex(this.selectedIndex, this.recordCount, direction);
+    }
+
     /** UIへ渡す選択状態の複製を返す。 */
     toSnapshot() {
         return { selectedIndex: this.selectedIndex, focusedIndex: this.focusedIndex };

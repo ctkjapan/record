@@ -14,4 +14,13 @@ export class RecordSelectionPolicy {
         if (direction === 'left' && focusedIndex === recordCount - 1) return 0;
         return null;
     }
+
+    /** 選択中のレコードから左右方向に1件移動し、端では一覧を循環する。 */
+    static adjacentIndex(selectedIndex, recordCount, direction) {
+        if (!Number.isInteger(selectedIndex) || !Number.isInteger(recordCount) || recordCount < 2) return null;
+        if (selectedIndex < 0 || selectedIndex >= recordCount) return null;
+        if (direction === 'right') return (selectedIndex + 1) % recordCount;
+        if (direction === 'left') return (selectedIndex - 1 + recordCount) % recordCount;
+        return null;
+    }
 }

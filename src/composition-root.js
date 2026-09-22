@@ -25,7 +25,7 @@ export function initializeApplication() {
 
     // cookieを介して選択レコードと再生秒数を永続化する実装。
     const playbackStateRepository = new PlaybackStateRepository();
-    const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false, fetchImpl: globalThis.fetch });
+    const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE });
     const playbackService = new PlaybackService({ audioEngine, playbackStateRepository });
     // ブラウザー固有のページ復元・ジェスチャー・自動再生復帰を制御する。
     const browserInteractionController = new BrowserInteractionController({

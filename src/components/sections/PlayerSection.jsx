@@ -2,7 +2,7 @@
 export default function PlayerSection() {
     return (
         <section id='PagePlayer'>
-            <div id='hero' className='hero' aria-labelledby='pageTitle'>
+            <section id='hero' className='hero' aria-labelledby='pageTitle'>
                 <div className='album-heading'>
                     <p className='album-index'>
                         <span id='albumNumber'>01</span> / <span id='albumMaxNumber'>99</span>
@@ -12,9 +12,9 @@ export default function PlayerSection() {
                         <em id='albumTitle'>Title</em>
                     </h1>
                 </div>
-            </div>
+            </section>
 
-            <div id='playerPanel' className='player' aria-label='レコードプレーヤー'>
+            <div id='playerPanel' className='player' role='region' aria-label='レコードプレーヤー'>
                 <div id='playerStage' className='player-stage'>
                     <canvas className='visualizer' id='visualizer' aria-hidden='true' />
                     <div className='record-shadow' aria-hidden='true' />

@@ -1,5 +1,6 @@
 import { findTouchByIdentifier } from './touch-utils.js';
 
+// メニューを閉じる上方向スワイプの最小距離（px）。
 const MENU_SWIPE_THRESHOLD = 48;
 
 /** ヘッダーメニューの開閉とキーボード操作を担当するController。 */
@@ -60,13 +61,13 @@ export class MenuController {
         if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 8 && event.cancelable) event.preventDefault();
     }
 
-    /** 上方向のポインタースワイプでメニューを閉じる。 */
+    /** 下方向のポインタースワイプでメニューを閉じる。 */
     releasePointer(event) {
         if (event.pointerId !== this.menuPointerId) return;
         const deltaX = event.clientX - this.menuPointerStartX;
         const deltaY = event.clientY - this.menuPointerStartY;
         this.menuPointerId = null;
-        if (event.type === 'pointerup' && this.isUpSwipe(deltaX, deltaY)) {
+        if (event.type === 'pointerup' && this.isDownSwipe(deltaX, deltaY)) {
             if (event.cancelable) event.preventDefault();
             this.close();
         }
@@ -90,7 +91,7 @@ export class MenuController {
         if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 8 && event.cancelable) event.preventDefault();
     }
 
-    /** 上方向のタッチスワイプでメニューを閉じる。 */
+    /** 下方向のタッチスワイプでメニューを閉じる。 */
     releaseTouch(event) {
         if (this.menuTouchIdentifier === null) return;
         const touch = findTouchByIdentifier(event.changedTouches, this.menuTouchIdentifier);
@@ -98,15 +99,15 @@ export class MenuController {
         const deltaX = touch.clientX - this.menuTouchStartX;
         const deltaY = touch.clientY - this.menuTouchStartY;
         this.menuTouchIdentifier = null;
-        if (event.type === 'touchend' && this.isUpSwipe(deltaX, deltaY)) {
+        if (event.type === 'touchend' && this.isDownSwipe(deltaX, deltaY)) {
             if (event.cancelable) event.preventDefault();
             this.close();
         }
     }
 
-    /** 上方向かつ規定距離以上のスワイプか判定する。 */
-    isUpSwipe(deltaX, deltaY) {
-        return deltaY <= -MENU_SWIPE_THRESHOLD && Math.abs(deltaY) > Math.abs(deltaX);
+    /** 下方向かつ規定距離以上のスワイプか判定する。 */
+    isDownSwipe(deltaX, deltaY) {
+        return deltaY >= MENU_SWIPE_THRESHOLD && Math.abs(deltaY) > Math.abs(deltaX);
     }
 
     /** メニューの表示状態を反転する。 */

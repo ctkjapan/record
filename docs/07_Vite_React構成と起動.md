@@ -18,6 +18,7 @@ npm run dev
 | `npm run build` | 本番成果物を`dist/`へ生成 |
 | `npm run preview` | 本番成果物をローカルで確認 |
 | `npm run deploy` | `dist/`をGitHub Pagesへ公開。先にビルドする |
+| `npm test` | JavaScript DDD回帰テストを実行 |
 
 ## 画面構成
 

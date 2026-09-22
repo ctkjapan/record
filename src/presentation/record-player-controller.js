@@ -3,8 +3,6 @@ const VISUALIZER_BAR_LINE_WIDTH = 4;
 const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
 // 再生中の時間表示と再生位置Cookieを更新する間隔。
 const AUDIO_TIME_UPDATE_INTERVAL_MS = 100;
-// 慣性回転を維持する割合。1は速度を減衰させない設定。
-const MOMENTUM_PERSISTENCE_RATE = 1;
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
@@ -373,17 +371,17 @@ export class RecordPlayerController {
         this.visualizerContext.lineWidth = VISUALIZER_BAR_LINE_WIDTH;
         this.visualizerContext.lineCap = 'round';
         this.visualizerContext.strokeStyle = this.visualizerAccent;
+        this.visualizerContext.globalAlpha = 0.42;
+        this.visualizerContext.beginPath();
         for (let index = 0; index < data.length; index += 1) {
             // 小さい音量の変化も視認できるよう、表示用の振幅を補正する。
             const amplitude = Math.pow(data[index] / 255, 0.75);
             const angle = index * barAngle - Math.PI / 2;
             const outerRadius = baseRadius + 8 + amplitude * 52;
-            this.visualizerContext.globalAlpha = 0.16 + amplitude * 0.55;
-            this.visualizerContext.beginPath();
             this.visualizerContext.moveTo(centerX + Math.cos(angle) * baseRadius, centerY + Math.sin(angle) * baseRadius);
             this.visualizerContext.lineTo(centerX + Math.cos(angle) * outerRadius, centerY + Math.sin(angle) * outerRadius);
-            this.visualizerContext.stroke();
         }
+        this.visualizerContext.stroke();
         // 時間領域波形を外周へ描画し、音声波形の変化を直接反映する。
         this.visualizerContext.beginPath();
         for (let index = 0; index <= data.length; index += 1) {
@@ -609,7 +607,6 @@ export class RecordPlayerController {
             return;
         }
         this.setRotation(this.rotation + this.velocity);
-        this.velocity *= MOMENTUM_PERSISTENCE_RATE;
         this.momentumFrame = requestAnimationFrame(() => this.applyMomentum());
     }
 

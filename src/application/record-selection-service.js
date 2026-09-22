@@ -40,4 +40,9 @@ export class RecordSelectionService {
     wrapTargetIndex(focusedIndex, recordCount, direction) {
         return RecordSelectionPolicy.wrapTargetIndex(focusedIndex, recordCount, direction);
     }
+
+    /** 選択中レコードの左右にある次候補位置を取得する。 */
+    getAdjacentSelectedIndex(direction) {
+        return this.selection?.adjacentIndex(direction) ?? null;
+    }
 }

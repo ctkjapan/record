@@ -7,10 +7,11 @@ export class TextRevealController {
     constructor({ documentRef = document, windowRef = window } = {}) {
         this.document = documentRef;
         this.window = windowRef;
-        // 初回表示とレコード情報の更新でアニメーションする要素。
+        // 初回表示とレコード情報の更新でアニメーションする要素、および各画面の表示状態。
         this.splashScreen = this.document.querySelector('#splashScreen');
         this.splashTitle = this.document.querySelector('#splashTitle');
         this.hero = this.document.querySelector('#hero');
+        this.pickerPanel = this.document.querySelector('#pickerPanel');
         // hero表示を繰り返すsetIntervalの識別子。
         this.heroRevealInterval = null;
     }
@@ -55,11 +56,13 @@ export class TextRevealController {
         this.reveal(this.hero);
     }
 
-    /** ページ、スプラッシュ、プレーヤーパネルの表示状態を判定する。 */
+    /** ページ、スプラッシュ、プレーヤー、選択パネルの表示状態を判定する。 */
     isPlayerScreenVisible() {
         if (!this.hero || this.document.hidden || (this.splashScreen && !this.splashScreen.hidden)) return false;
         const playerPanel = this.hero.closest?.('#playerPanel');
-        return !playerPanel?.hidden;
+        // プレーヤーが下に残る選択画面も、heroを再生する画面から除外する。
+        const isPickerVisible = this.pickerPanel && !this.pickerPanel.hidden;
+        return !playerPanel?.hidden && !isPickerVisible;
     }
 
     /** 対象要素のテキストを文字単位に分割して表示する。 */
@@ -91,7 +94,9 @@ export class TextRevealController {
 
     /** 空白だけのテキストノードを除外して取得する。 */
     collectTextNodes(root) {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        // 注入されたDocumentのWindowからテキストノード判定定数を取得する。
+        const nodeFilter = this.document.defaultView?.NodeFilter ?? globalThis.NodeFilter;
+        const walker = this.document.createTreeWalker(root, nodeFilter.SHOW_TEXT);
         const textNodes = [];
         let currentNode = walker.nextNode();
         while (currentNode) {

@@ -1,7 +1,9 @@
 import { findTouchByIdentifier } from './touch-utils.js';
 
-// プレーヤー画面のスワイプを選択画面への移動とみなす距離（px）。
+// プレーヤー画面のスワイプ操作を実行する最小距離（px）。
 const PLAYER_STAGE_SWIPE_THRESHOLD = 48;
+// レコード選択パネルのスライド遷移時間（ms）。
+const PICKER_SLIDE_DURATION_MS = 400;
 // 端から外向きへ循環移動する選択画面のスワイプ距離（px）。
 const PICKER_WRAP_SWIPE_THRESHOLD = 48;
 // 端から外向きの意図を通常の横スクロールより先に検出する距離（px）。
@@ -16,7 +18,7 @@ export class RecordPickerController {
         this.recordSelectionService = recordSelectionService;
         this.playerController = playerController;
         this.playbackService = playbackService;
-        // プレーヤーステージの下スワイプからヘッダーメニューを開く処理。
+        // プレーヤーステージの上スワイプからヘッダーメニューを開く処理。
         this.openMenu = openMenu;
         // プレーヤー画面へ戻ったときのテキストアニメーション処理。
         this.textRevealController = textRevealController;
@@ -28,7 +30,6 @@ export class RecordPickerController {
         this.pickerStatus = document.querySelector('#pickerStatus');
         this.albumMaxNumber = document.querySelector('#albumMaxNumber');
         this.pickerPositionMax = document.querySelector('#pickerPositionMax');
-        this.playerPanel = document.querySelector('#playerPanel');
         this.albumNumber = document.querySelector('#albumNumber');
         this.albumArtist = document.querySelector('#albumArtist');
         this.albumTitle = document.querySelector('#albumTitle');
@@ -36,7 +37,6 @@ export class RecordPickerController {
         this.playerStage = document.querySelector('#playerStage');
         this.pageBody = document.body;
         // レコード一覧と現在のフォーカス／選択状態。
-        this.catalog = null;
         this.records = [];
         // マウスドラッグによるカードスクロールの一時状態。
         this.pickerPointerId = null;
@@ -62,6 +62,9 @@ export class RecordPickerController {
         // カード要素とスクロールrAFの管理状態。
         this.pickerCards = [];
         this.pickerScrollFrame = null;
+        this.pickerOpenFrame = null;
+        this.pickerCloseTimer = null;
+        this.pickerCloseHandler = null;
     }
 
     /** レコード一覧を取得して初期表示を構築する。 */
@@ -69,8 +72,7 @@ export class RecordPickerController {
         this.bindEvents();
         this.changeButton.disabled = true;
         try {
-            this.catalog = await this.recordCatalogService.load();
-            this.records = this.catalog.all();
+            this.records = await this.recordCatalogService.load();
             const { selectedIndex } = this.recordSelectionService.initialize(this.records.length, this.getStoredRecordIndex());
             this.renderPicker();
             this.selectRecord(selectedIndex);
@@ -130,19 +132,18 @@ export class RecordPickerController {
         if (isDirectionalSwipe && event.cancelable) event.preventDefault();
     }
 
-    /** プレーヤーステージの左右スワイプ完了時に選択画面を開く。 */
+    /** プレーヤーステージで完了したスワイプの操作を振り分ける。 */
     releasePlayerStagePointer(event) {
         if (event.pointerId !== this.playerStagePointerId) return;
         const deltaX = event.clientX - this.playerStageSwipeStartX;
         const deltaY = event.clientY - this.playerStageSwipeStartY;
-        const isSwipeCompleted = event.type === 'pointerup' || event.type === 'pointercancel';
-        const shouldOpenPicker = isSwipeCompleted && Math.abs(deltaX) >= PLAYER_STAGE_SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY);
-        const shouldOpenMenu = isSwipeCompleted && deltaY >= PLAYER_STAGE_SWIPE_THRESHOLD && deltaY > Math.abs(deltaX);
+        const isSwipeCompleted = event.type === 'pointerup';
+        const shouldHandleSwipe = isSwipeCompleted && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= PLAYER_STAGE_SWIPE_THRESHOLD;
         this.playerStagePointerId = null;
         if (this.playerStage.hasPointerCapture?.(event.pointerId)) this.playerStage.releasePointerCapture(event.pointerId);
-        if (shouldOpenPicker || shouldOpenMenu) {
+        if (shouldHandleSwipe) {
             if (event.cancelable) event.preventDefault();
-            this.openPlayerStageSwipe(deltaX, deltaY);
+            this.handlePlayerStageSwipe(deltaX, deltaY);
         }
     }
 
@@ -164,7 +165,7 @@ export class RecordPickerController {
         if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 8 && event.cancelable) event.preventDefault();
     }
 
-    /** タッチ終了時に左右なら選択画面、下方向ならメニューを開く。 */
+    /** タッチ終了時に上下の画面操作または左右のレコード切り替えを行う。 */
     releasePlayerStageTouch(event) {
         if (this.playerStageTouchIdentifier === null) return;
         const touch = findTouchByIdentifier(event.changedTouches, this.playerStageTouchIdentifier);
@@ -172,9 +173,9 @@ export class RecordPickerController {
         const deltaX = touch.clientX - this.playerStageTouchStartX;
         const deltaY = touch.clientY - this.playerStageTouchStartY;
         this.playerStageTouchIdentifier = null;
-        if (event.type === 'touchend' && (this.isHorizontalPlayerStageSwipe(deltaX, deltaY) || this.isDownPlayerStageSwipe(deltaX, deltaY))) {
+        if (event.type === 'touchend' && (this.isHorizontalPlayerStageSwipe(deltaX, deltaY) || this.isDownPlayerStageSwipe(deltaX, deltaY) || this.isUpPlayerStageSwipe(deltaX, deltaY))) {
             if (event.cancelable) event.preventDefault();
-            this.openPlayerStageSwipe(deltaX, deltaY);
+            this.handlePlayerStageSwipe(deltaX, deltaY);
         }
     }
 
@@ -188,18 +189,31 @@ export class RecordPickerController {
         return deltaY >= PLAYER_STAGE_SWIPE_THRESHOLD && deltaY > Math.abs(deltaX);
     }
 
-    /** プレーヤーステージのスワイプ方向に応じた画面を開く。 */
-    openPlayerStageSwipe(deltaX, deltaY) {
-        if (this.isDownPlayerStageSwipe(deltaX, deltaY)) {
+    /** プレーヤーステージの上方向スワイプか判定する。 */
+    isUpPlayerStageSwipe(deltaX, deltaY) {
+        return deltaY <= -PLAYER_STAGE_SWIPE_THRESHOLD && Math.abs(deltaY) > Math.abs(deltaX);
+    }
+
+    /** プレーヤーステージの上下左右スワイプを対応する操作へ振り分ける。 */
+    handlePlayerStageSwipe(deltaX, deltaY) {
+        if (this.isUpPlayerStageSwipe(deltaX, deltaY)) {
             this.openMenu();
             return;
         }
-        if (this.isHorizontalPlayerStageSwipe(deltaX, deltaY)) this.openPicker();
+        if (this.isDownPlayerStageSwipe(deltaX, deltaY)) {
+            this.openPicker();
+            return;
+        }
+        if (this.isHorizontalPlayerStageSwipe(deltaX, deltaY)) {
+            const direction = deltaX > 0 ? 'right' : 'left';
+            const nextIndex = this.recordSelectionService.getAdjacentSelectedIndex(direction);
+            if (nextIndex !== null) this.selectRecord(nextIndex, { preserveRotation: true });
+        }
     }
 
     /** cookieのレコードIDを一覧内の配列位置へ変換する。 */
     getStoredRecordIndex() {
-        return this.catalog.indexOfId(this.playbackService.getState().recordId);
+        return this.recordCatalogService.indexOfRecordId(this.playbackService.getState().recordId);
     }
 
     /** レコード件数を画面の分母表示へ反映する。 */
@@ -209,10 +223,12 @@ export class RecordPickerController {
         this.pickerPositionMax.textContent = recordCount;
     }
 
+    /** 現在カード中央へフォーカスしているレコード位置を返す。 */
     get focusedRecordIndex() {
         return this.recordSelectionService.getState().focusedIndex;
     }
 
+    /** プレーヤーで確定選択されているレコード位置を返す。 */
     get selectedRecordIndex() {
         return this.recordSelectionService.getState().selectedIndex;
     }
@@ -246,14 +262,23 @@ export class RecordPickerController {
     }
 
     /** レコード選択ユースケースを実行し、選択画面の表示を同期する。 */
-    selectRecord(index) {
+    selectRecord(index, { preserveRotation = false } = {}) {
         const previousSelectedIndex = this.selectedRecordIndex;
+        const previousFocusedIndex = this.focusedRecordIndex;
+        const wasPlaying = preserveRotation && (this.playerController.isAudioPlaying || this.playbackService.audioState.isPlaying);
+        const playbackState = preserveRotation ? this.playbackService.audioState : null;
         const { selectedIndex } = this.recordSelectionService.select(index);
-        const record = this.catalog.at(selectedIndex);
+        const record = this.recordCatalogService.getRecordAt(selectedIndex);
         const { isRecordChanged } = this.playbackService.selectRecord(record);
-        if (isRecordChanged) this.playerController.resetForRecordChange();
+        if (isRecordChanged && !preserveRotation) this.playerController.resetForRecordChange();
+        if (isRecordChanged && preserveRotation && playbackState) {
+            this.playbackService.setDirection(playbackState.direction);
+            this.playbackService.setPlaybackRate(playbackState.playbackRate);
+            if (wasPlaying) this.playerController.updatePlaying(true);
+        }
         this.playerController.setRecordImage(record.imageUrl);
         document.documentElement.style.setProperty('--accent-color', record.color);
+        this.playerController.invalidateVisualizer();
         this.albumNumber.textContent = String(selectedIndex + 1).padStart(2, '0');
         this.albumArtist.textContent = record.artist;
         this.albumTitle.textContent = record.trackTitle;
@@ -261,29 +286,70 @@ export class RecordPickerController {
             this.pickerCards[previousSelectedIndex]?.classList.remove('is-selected');
             this.pickerCards[selectedIndex]?.classList.add('is-selected');
         }
+        if (previousFocusedIndex !== selectedIndex) {
+            this.pickerCards[previousFocusedIndex]?.classList.remove('is-focused');
+            this.pickerCards[selectedIndex]?.classList.add('is-focused');
+        }
+        this.pickerPosition.textContent = String(selectedIndex + 1).padStart(2, '0');
         this.pickerStatus.textContent = `${record.title} を再生中`;
     }
 
     /** 選択画面を開き、現在のレコードを中央へスクロールする。 */
     openPicker() {
+        this.clearPickerCloseWait();
+        if (this.pickerOpenFrame !== null) cancelAnimationFrame(this.pickerOpenFrame);
         this.textRevealController?.onPlayerScreenHidden?.();
         this.playerController.setVisualizerVisible?.(false);
         this.pickerPanel.hidden = false;
-        this.playerPanel.hidden = true;
         this.pageBody.classList.add('picker-open');
         this.changeButton.setAttribute('aria-pressed', 'true');
         this.setFocusedRecord(this.selectedRecordIndex);
-        requestAnimationFrame(() => this.pickerTrack.querySelector(`[data-record-index="${this.selectedRecordIndex}"]`)?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' }));
+        this.pickerOpenFrame = requestAnimationFrame(() => {
+            this.pickerOpenFrame = requestAnimationFrame(() => {
+                this.pickerOpenFrame = null;
+                this.pickerPanel.classList.add('is-visible');
+            });
+        });
+        requestAnimationFrame(() => this.pickerCards[this.selectedRecordIndex]?.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' }));
     }
 
     /** 選択画面を閉じてプレーヤー画面へ戻る。 */
     closePicker() {
+        if (this.pickerCloseHandler && !this.pickerPanel.classList.contains('is-visible')) return;
+        if (this.pickerOpenFrame !== null) {
+            cancelAnimationFrame(this.pickerOpenFrame);
+            this.pickerOpenFrame = null;
+        }
+        const wasVisible = this.pickerPanel.classList.contains('is-visible');
+        this.pickerPanel.classList.remove('is-visible');
+        if (!wasVisible) {
+            this.finishPickerClose();
+            return;
+        }
+        this.pickerCloseHandler = (event) => {
+            if (event.target === this.pickerPanel && event.propertyName === 'transform') this.finishPickerClose();
+        };
+        this.pickerPanel.addEventListener('transitionend', this.pickerCloseHandler);
+        this.pickerCloseTimer = globalThis.setTimeout(() => this.finishPickerClose(), PICKER_SLIDE_DURATION_MS + 100);
+    }
+
+    /** スライドアウト完了後に選択画面を閉じ、プレーヤー操作を復帰する。 */
+    finishPickerClose() {
+        if (this.pickerPanel.classList.contains('is-visible')) return;
+        this.clearPickerCloseWait();
         this.pickerPanel.hidden = true;
-        this.playerPanel.hidden = false;
         this.pageBody.classList.remove('picker-open');
         this.changeButton.setAttribute('aria-pressed', 'false');
         this.playerController.restoreVisualizerVisibility?.();
         this.textRevealController?.onPlayerScreenShown();
+    }
+
+    /** 閉じる遷移のイベントとフォールバックタイマーを解放する。 */
+    clearPickerCloseWait() {
+        if (this.pickerCloseTimer !== null) globalThis.clearTimeout(this.pickerCloseTimer);
+        if (this.pickerCloseHandler) this.pickerPanel.removeEventListener('transitionend', this.pickerCloseHandler);
+        this.pickerCloseTimer = null;
+        this.pickerCloseHandler = null;
     }
 
     /** スクロール位置から中央に最も近いカードを計算する。 */

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { PlaybackService } from '../src/application/playback-service.js';
+import { RecordCatalogService } from '../src/application/record-catalog-service.js';
 import { RecordSelectionService } from '../src/application/record-selection-service.js';
 import { PlaybackPolicy } from '../src/domain/playback-policy.js';
 import { RecordSelectionPolicy } from '../src/domain/record-selection-policy.js';
@@ -540,6 +541,30 @@ test('RecordCatalog requires unique record IDs and preserves lookup behavior', (
     assert.equal(new RecordCatalog(shippedRecords).all().length, shippedRecords.length);
 });
 
+test('record catalog application service keeps the domain aggregate behind its query boundary', async () => {
+    const recordA = new Record({ id: 'record-a', title: 'Artist / Track A', color: '#111111', audioUrl: 'a.mp3', imageUrl: 'a.jpg' });
+    const recordB = new Record({ id: 'record-b', title: 'Artist / Track B', color: '#222222', audioUrl: 'b.mp3', imageUrl: 'b.jpg' });
+    let loadCount = 0;
+    const service = new RecordCatalogService({
+        findAll: async () => {
+            loadCount += 1;
+            return [recordA, recordB];
+        },
+    });
+
+    assert.throws(() => service.getRecordAt(0), /読み込まれていません/);
+    assert.equal('recordCatalog' in service, false);
+    assert.equal('requireCatalog' in service, false);
+    const records = await service.load();
+
+    assert.equal(loadCount, 1);
+    assert.deepEqual(records, [recordA, recordB]);
+    assert.equal(service.indexOfRecordId('record-b'), 1);
+    assert.equal(service.indexOfRecordId('unknown'), 0);
+    assert.equal(service.getRecordAt(1), recordB);
+    assert.throws(() => service.getRecordAt(2), /レコードが見つかりません/);
+});
+
 test('record selection domain rule wraps between both ends independently on consecutive gestures', () => {
     const service = new RecordSelectionService();
 
@@ -605,21 +630,24 @@ test('record picker leaves an interior horizontal swipe to native scrolling', ()
     assert.equal(move.defaultPrevented, undefined);
 });
 
-test('hero text reveal starts on player display then repeats every ten seconds while visible', () => {
+test('hero text reveal pauses while the picker overlays the player and resumes on return', () => {
     const controller = Object.create(TextRevealController.prototype);
     const splashTitle = {};
     const hero = {};
     const splashScreen = { hidden: false };
     const playerPanel = { hidden: false };
+    const pickerPanel = { hidden: true };
     const revealed = [];
     let intervalCallback;
     let intervalMs;
     let intervalId = 0;
+    let intervalStarts = 0;
     let visibilityListener;
     const clearedIntervals = [];
     controller.splashScreen = splashScreen;
     controller.splashTitle = splashTitle;
     controller.hero = hero;
+    controller.pickerPanel = pickerPanel;
     controller.document = {
         hidden: false,
         addEventListener(type, listener) {
@@ -630,6 +658,7 @@ test('hero text reveal starts on player display then repeats every ten seconds w
         setInterval(callback, delay) {
             intervalCallback = callback;
             intervalMs = delay;
+            intervalStarts += 1;
             intervalId += 1;
             return intervalId;
         },
@@ -647,11 +676,17 @@ test('hero text reveal starts on player display then repeats every ten seconds w
     controller.document.hidden = true;
     intervalCallback();
     controller.document.hidden = false;
+    pickerPanel.hidden = false;
+    visibilityListener();
+    assert.equal(intervalStarts, 1);
+    assert.equal(clearedIntervals.length, 1);
+    pickerPanel.hidden = true;
     visibilityListener();
     playerPanel.hidden = true;
     intervalCallback();
 
     assert.equal(intervalMs, 10_000);
+    assert.equal(intervalStarts, 2);
     assert.deepEqual(revealed, [splashTitle, hero, hero, hero]);
     assert.deepEqual(clearedIntervals, [1, 2]);
 });
@@ -917,6 +952,13 @@ test('dependencies point inward and browser controllers do not import domain or 
     assertNoForbiddenImports(collectFiles('src/domain'), /from\s+['"][^'"]*\/(?:application|infrastructure|presentation)\//, 'outer layers');
     assertNoForbiddenImports(collectFiles('src/application'), /from\s+['"][^'"]*\/(?:infrastructure|presentation)\//, 'outer layers');
     assertNoForbiddenImports(collectFiles('src/presentation'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
+    const pickerController = readFileSync(join(projectRoot, 'src/presentation/record-picker-controller.js'), 'utf8');
+    assert.doesNotMatch(pickerController, /this\.catalog\.(?:all|at|indexOfId)\(/, 'Presentation must query the catalog through its application service');
+    const playerSection = readFileSync(join(projectRoot, 'src/components/sections/PlayerSection.jsx'), 'utf8');
+    const pickerSection = readFileSync(join(projectRoot, 'src/components/sections/PickerSection.jsx'), 'utf8');
+    assert.match(playerSection, /id='hero' className='hero' aria-labelledby='pageTitle'/);
+    assert.match(playerSection, /id='playerPanel' className='player' role='region' aria-label='レコードプレーヤー'/);
+    assert.match(pickerSection, /id='pickerPanel' className='picker-panel' role='region' aria-label='レコードを変更'/);
     const compositionRoot = readFileSync(join(projectRoot, 'src/composition-root.js'), 'utf8');
     assert.match(compositionRoot, /new BrowserInteractionController\(\{/);
     assert.match(compositionRoot, /playbackService,/);

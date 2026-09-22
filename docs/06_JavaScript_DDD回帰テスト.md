@@ -9,7 +9,7 @@ DDDへの段階的な整理で、レコード再選択、再生位置の保存�
 プロジェクトルートで実行します。
 
 ```sh
-node --test tests/javascript-ddd-regression.test.mjs
+npm test
 for file in $(rg --files src -g '*.js'); do node --check "$file" || exit 1; done
 git diff --check
 ```
@@ -32,7 +32,10 @@ git diff --check
 - ページ復元時のリロード、履歴スワイプ・pull-to-refresh抑止、長押し・ドラッグ抑止
 - プレーヤー／レコード選択画面の表示切替・フォーカス／バックグラウンド復帰時の自動再生可否判定とリロード
 - スプラッシュ起動成功時のロック解除と音声有効化失敗時の再試行表示
+- hero文字アニメーションの10秒周期、バックグラウンド復帰、選択画面表示中の停止
+- コンポーネントのリージョン名とARIAラベル
 - JSON Repositoryのno-store取得、Domainモデルへの変換、HTTP・形式エラー
+- `RecordCatalogService`によるDomain集約の隠蔽と一覧・位置・ID検索境界
 - cookie Repositoryの旧値fallback、異常値補正、保存・URLエンコード
 - Domain、Application、Presentation間の依存方向
 

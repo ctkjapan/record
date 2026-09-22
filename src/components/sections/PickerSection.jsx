@@ -2,7 +2,7 @@
 export default function PickerSection() {
     return (
         <section id='PagePicker'>
-            <div id='pickerPanel' className='picker-panel' aria-label='レコードを変更' hidden>
+            <div id='pickerPanel' className='picker-panel' role='region' aria-label='レコードを変更' hidden>
                 <div className='picker-heading'>
                     <div>
                         <h2>
