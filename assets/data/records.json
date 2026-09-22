@@ -4,7 +4,7 @@
     "title": "P4D / Dance!",
     "color": "#f3ec05",
     "audioUrl": "assets/mp3/Dance!.mp3",
-    "imageUrl": "assets/images/Dance!.png"
+    "imageUrl": "assets/images/Dance!.webp"
   },
   {
     "id": "002",
@@ -18,70 +18,70 @@
     "title": "SEKAI NO OWARI / 虹色の戦争",
     "color": "#54c9c5",
     "audioUrl": "assets/mp3/虹色の戦争.mp3",
-    "imageUrl": "assets/images/虹色の戦争.jpg"
+    "imageUrl": "assets/images/虹色の戦争.webp"
   },
   {
     "id": "004",
     "title": "Mrs. GREEN APPLE / 青と夏",
     "color": "#02599e",
     "audioUrl": "assets/mp3/mga_2.mp3",
-    "imageUrl": "assets/images/青と夏.png"
+    "imageUrl": "assets/images/青と夏.webp"
   },
   {
     "id": "005",
     "title": "Earth, Wind & Fire / September",
     "color": "#eaa734",
     "audioUrl": "assets/mp3/Earth, Wind & Fire - September.mp3",
-    "imageUrl": "assets/images/Earth, Wind & Fire - September.jpg"
+    "imageUrl": "assets/images/Earth, Wind & Fire - September.webp"
   },
   {
     "id": "006",
     "title": "Ken Ishii / Extra",
     "color": "#c9c94d",
     "audioUrl": "assets/mp3/Ken Ishii - Extra.mp3",
-    "imageUrl": "assets/images/Ken Ishii - Extra.jpg"
+    "imageUrl": "assets/images/Ken Ishii - Extra.webp"
   },
   {
     "id": "007",
     "title": "Creepy Nuts / Bling-Bang-Bang-Born",
     "color": "#c90665",
     "audioUrl": "assets/mp3/Creepy Nuts - Bling-Bang-Bang-Born.mp3",
-    "imageUrl": "assets/images/Creepy Nuts - Bling-Bang-Bang-Born.jpg"
+    "imageUrl": "assets/images/Creepy Nuts - Bling-Bang-Bang-Born.webp"
   },
   {
     "id": "008",
     "title": "Metaphor: ReFantazio / 英雄譚序曲",
     "color": "#eeeeee",
     "audioUrl": "assets/mp3/英雄譚序曲.mp3",
-    "imageUrl": "assets/images/英雄譚序曲.jpg"
+    "imageUrl": "assets/images/英雄譚序曲.webp"
   },
   {
     "id": "009",
     "title": "Official髭男dism / Pretender",
     "color": "#b97959",
     "audioUrl": "assets/mp3/Official髭男dism - Pretender.mp3",
-    "imageUrl": "assets/images/Official髭男dism - Pretender.jpg"
+    "imageUrl": "assets/images/Official髭男dism - Pretender.webp"
   },
   {
     "id": "010",
     "title": "JSR / Let Mom Sleep",
     "color": "#f2c61e",
     "audioUrl": "assets/mp3/JSR - Let Mom Sleep.mp3",
-    "imageUrl": "assets/images/JSR - Let Mom Sleep.jpg"
+    "imageUrl": "assets/images/JSR - Let Mom Sleep.webp"
   },
   {
     "id": "011",
     "title": "JSRF / Funky Dealer",
     "color": "#9f928b",
     "audioUrl": "assets/mp3/JSRF - Funky Dealer.mp3",
-    "imageUrl": "assets/images/JSRF - Funky Dealer.jpg"
+    "imageUrl": "assets/images/JSRF - Funky Dealer.webp"
   },
   {
     "id": "012",
     "title": "米津玄師 / Plazma",
     "color": "#13ff26",
     "audioUrl": "assets/mp3/米津玄師 - Plazma.mp3",
-    "imageUrl": "assets/images/米津玄師 - Plazma.jpg"
+    "imageUrl": "assets/images/米津玄師 - Plazma.webp"
   },
   {
     "id": "013",
@@ -95,6 +95,6 @@
     "title": "あいみょん / マリーゴールド",
     "color": "#ec7507",
     "audioUrl": "assets/mp3/あいみょん - マリーゴールド.mp3",
-    "imageUrl": "assets/images/あいみょん - マリーゴールド.jpg"
+    "imageUrl": "assets/images/あいみょん - マリーゴールド.webp"
   }
 ]
