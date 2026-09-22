@@ -6,12 +6,17 @@ import test from 'node:test';
 
 import { PlaybackService } from '../assets/js/application/playback-service.js';
 import { PlaybackPolicy } from '../assets/js/domain/playback-policy.js';
+import { PlaybackDirection } from '../assets/js/domain/playback-direction.js';
 import { PlaybackSession } from '../assets/js/domain/playback-session.js';
+import { PlaybackSeconds } from '../assets/js/domain/playback-seconds.js';
+import { RotationSpeedPercent } from '../assets/js/domain/rotation-speed-percent.js';
 import { Record } from '../assets/js/domain/record.js';
+import { RecordCatalog } from '../assets/js/domain/record-catalog.js';
 import { BrowserInteractionController } from '../assets/js/controller/browser-interaction-controller.js';
 import { SplashController } from '../assets/js/controller/splash-controller.js';
 import { PlaybackStateRepository } from '../assets/js/infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from '../assets/js/infrastructure/record-json-repository.js';
+import { WebAudioEngine } from '../assets/js/infrastructure/web-audio-engine.js';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -226,6 +231,39 @@ test('rotation keeps the previous forward, reverse, and zero-velocity directions
     assert.equal(PlaybackPolicy.directionFromRotationVelocity(2, 'reverse'), 'forward');
     assert.equal(PlaybackPolicy.directionFromRotationVelocity(-2, 'forward'), 'reverse');
     assert.equal(PlaybackPolicy.directionFromRotationVelocity(0, 'reverse'), 'reverse');
+    assert.equal(PlaybackPolicy.directionFromRotationVelocity(0, 'invalid'), 'forward');
+});
+
+test('PlaybackDirection is an immutable value object with a valid reverse operation', () => {
+    const invalidDirection = new PlaybackDirection('invalid');
+    const reverseDirection = new PlaybackDirection('reverse');
+
+    assert.equal(invalidDirection.value, 'forward');
+    assert.equal(invalidDirection.reverse().value, 'reverse');
+    assert.equal(reverseDirection.reverse().value, 'forward');
+    assert.equal(Object.isFrozen(reverseDirection), true);
+});
+
+test('rotation speed conversion follows the domain policy in both directions', () => {
+    const { service } = createPlaybackService();
+
+    assert.equal(PlaybackPolicy.rotationVelocityFromSpeedPercent(80, 'forward'), 10);
+    assert.equal(PlaybackPolicy.rotationVelocityFromSpeedPercent(80, 'reverse'), -10);
+    assert.equal(PlaybackPolicy.rotationSpeedPercentFromVelocity(-10), 80);
+    assert.equal(PlaybackPolicy.rotationSpeedPercentFromVelocity(20), 100);
+    assert.equal(service.rotationVelocityFromSpeedPercent(80, 'reverse'), -10);
+    assert.equal(service.rotationSpeedPercentFromVelocity(-10), 80);
+    assert.equal(PlaybackPolicy.rateFromRotationSpeedPercent(-10), 0);
+    assert.equal(PlaybackPolicy.rateFromRotationSpeedPercent(150), 2);
+    assert.equal(PlaybackPolicy.rateFromRotationSpeedPercent(Number.NaN), 0);
+});
+
+test('RotationSpeedPercent enforces its finite 0 to 100 domain range', () => {
+    assert.equal(new RotationSpeedPercent('42.5').value, 42.5);
+    assert.equal(new RotationSpeedPercent(-1).value, 0);
+    assert.equal(new RotationSpeedPercent(101).value, 100);
+    assert.equal(new RotationSpeedPercent(Number.NaN).value, 0);
+    assert.equal(Object.isFrozen(new RotationSpeedPercent(1)), true);
 });
 
 test('playback session continues to normalize stored seconds and preserve settings on record change', () => {
@@ -243,6 +281,15 @@ test('playback session continues to normalize stored seconds and preserve settin
         noiseEnabled: true,
         visualizerEnabled: false,
     });
+});
+
+test('PlaybackSeconds owns the finite non-negative playback position invariant', () => {
+    assert.equal(new PlaybackSeconds('12.5').value, 12.5);
+    assert.equal(new PlaybackSeconds(-1).value, 0);
+    assert.equal(new PlaybackSeconds(Number.NaN).value, 0);
+    assert.equal(new PlaybackSeconds(Number.POSITIVE_INFINITY).value, 0);
+    assert.equal(Object.isFrozen(new PlaybackSeconds(1)), true);
+    assert.equal(new PlaybackSession({ playbackSeconds: -1 }).playbackSeconds, 0);
 });
 
 test('noise state persists on success and falls back to off on failure', async () => {
@@ -321,6 +368,24 @@ test('record JSON repository keeps no-store fetching and hydrates domain records
     assert.equal(Object.isFrozen(records[0]), true);
 });
 
+test('Record rejects blank or non-string required values and keeps title parsing', () => {
+    const validRecord = {
+        id: 'record-a',
+        title: 'Artist / Track / Remix',
+        color: '#112233',
+        audioUrl: 'assets/mp3/a.mp3',
+        imageUrl: 'assets/img/a.jpg',
+    };
+    const record = new Record(validRecord);
+
+    assert.equal(record.artist, 'Artist');
+    assert.equal(record.trackTitle, 'Track / Remix');
+    for (const field of Object.keys(validRecord)) {
+        assert.throws(() => new Record({ ...validRecord, [field]: '   ' }), /レコード定義が不正/);
+        assert.throws(() => new Record({ ...validRecord, [field]: 1 }), /レコード定義が不正/);
+    }
+});
+
 test('record JSON repository retains the browser global receiver when invoking fetch', async () => {
     let receiver;
     const repository = new RecordJsonRepository('/records.json', {
@@ -343,6 +408,77 @@ test('record JSON repository rejects HTTP errors and invalid document shapes', a
         fetchImpl: async () => ({ ok: true, json: async () => ({ records: [] }) }),
     });
     await assert.rejects(shapeFailure.findAll(), /形式が不正/);
+});
+
+test('RecordCatalog requires unique record IDs and preserves lookup behavior', () => {
+    const recordA = new Record({ id: 'record-a', title: 'Artist / Track A', color: '#111111', audioUrl: 'a.mp3', imageUrl: 'a.jpg' });
+    const recordB = new Record({ id: 'record-b', title: 'Artist / Track B', color: '#222222', audioUrl: 'b.mp3', imageUrl: 'b.jpg' });
+    const catalog = new RecordCatalog([recordA, recordB]);
+    const shippedRecords = JSON.parse(readFileSync(join(projectRoot, 'assets/data/records.json'), 'utf8')).map((item) => new Record(item));
+
+    assert.equal(catalog.indexOfId('record-b'), 1);
+    assert.equal(catalog.indexOfId('unknown'), 0);
+    assert.throws(() => new RecordCatalog([recordA, recordA]), /重複したID/);
+    assert.throws(() => new RecordCatalog([recordA, { id: 'record-c' }]), /不正な要素/);
+    assert.throws(() => new RecordCatalog([recordA, null]), /不正な要素/);
+    assert.throws(() => new RecordCatalog([recordA, , recordB]), /不正な要素/);
+    assert.equal(new RecordCatalog(shippedRecords).all().length, shippedRecords.length);
+});
+
+test('Web Audio engine loads and reverses audio through its injected fetch boundary', async () => {
+    let receiver;
+    let request;
+    const sourceBuffer = {
+        numberOfChannels: 1,
+        length: 3,
+        sampleRate: 44100,
+        duration: 3 / 44100,
+        getChannelData: () => Float32Array.from([0.1, 0.2, 0.3]),
+    };
+    const context = {
+        decodeAudioData: async (data) => {
+            assert.equal(data, audioData);
+            return sourceBuffer;
+        },
+        createBuffer: (channels, length, sampleRate) => {
+            assert.deepEqual([channels, length, sampleRate], [1, 3, 44100]);
+            const channel = new Float32Array(length);
+            return { getChannelData: () => channel };
+        },
+    };
+    const audioData = new ArrayBuffer(3);
+    const engine = new WebAudioEngine({
+        fetchImpl: function (...args) {
+            receiver = this;
+            request = args;
+            return Promise.resolve({
+                ok: true,
+                headers: { get: () => null },
+                body: null,
+                arrayBuffer: async () => audioData,
+            });
+        },
+    });
+    engine.audioSourceUrl = '/audio/record.mp3';
+    engine.initializeAudioContext = () => context;
+
+    const result = await engine.loadAudioBuffer();
+
+    assert.equal(result, sourceBuffer);
+    assert.equal(receiver, globalThis);
+    assert.equal(request[0], '/audio/record.mp3');
+    assert.equal(request[1].signal instanceof AbortSignal, true);
+    assert.deepEqual([...engine.reversedAudioBuffer.getChannelData()], [...Float32Array.from([0.3, 0.2, 0.1])]);
+    assert.equal(engine.audioBufferCache.has('/audio/record.mp3'), true);
+});
+
+test('Web Audio engine normalizes direction with the domain rule', () => {
+    const engine = new WebAudioEngine({ fetchImpl: async () => {} });
+
+    engine.setDirection('reverse');
+    assert.equal(engine.direction, 'reverse');
+    engine.setDirection('invalid');
+    assert.equal(engine.direction, 'forward');
 });
 
 test('playback cookie repository preserves fallback, normalization, and encoded writes', () => {
@@ -371,6 +507,9 @@ test('playback cookie repository preserves fallback, normalization, and encoded 
         visualizerEnabled: true,
     });
     assert.match(documentRef.cookie, /groove-record-index=record%20003/);
+
+    repository.savePlaybackSeconds(-3);
+    assert.equal(repository.load().playbackSeconds, 0);
 });
 
 test('browser interaction controller preserves page restoration reload behavior', () => {

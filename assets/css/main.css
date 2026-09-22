@@ -581,7 +581,7 @@ body {
               height: .9rem;
               border-radius: 50%;
               background: rgb(var(--rgb-red));
-              animation: menu-zoom-in 1s cubic-bezier(.2, .8, .2, 1) alternate infinite;
+              animation: menu-zoom-in 2s cubic-bezier(.2, .8, .2, 1) alternate infinite;
             }
           }
         }

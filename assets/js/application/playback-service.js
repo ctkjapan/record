@@ -74,7 +74,7 @@ export class PlaybackService {
     }
 
     setDirection(direction) {
-        const normalizedDirection = PlaybackDirection.normalize(direction);
+        const normalizedDirection = new PlaybackDirection(direction).value;
         this.audioEngine.setDirection(normalizedDirection);
         return normalizedDirection;
     }
@@ -131,6 +131,14 @@ export class PlaybackService {
         return PlaybackPolicy.rateFromRotationSpeedPercent(speedPercent);
     }
 
+    rotationVelocityFromSpeedPercent(speedPercent, direction) {
+        return PlaybackPolicy.rotationVelocityFromSpeedPercent(speedPercent, direction);
+    }
+
+    rotationSpeedPercentFromVelocity(velocity) {
+        return PlaybackPolicy.rotationSpeedPercentFromVelocity(velocity);
+    }
+
     resolveDirectionFromRotation(velocity) {
         return PlaybackPolicy.directionFromRotationVelocity(velocity, this.audioEngine.direction);
     }
@@ -145,7 +153,7 @@ export class PlaybackService {
 
     /** 再生方向を反転し、音声エンジンへ反映する。 */
     toggleDirection() {
-        const nextDirection = PlaybackDirection.reverse(this.audioEngine.direction);
+        const nextDirection = new PlaybackDirection(this.audioEngine.direction).reverse().value;
         this.setDirection(nextDirection);
         return nextDirection;
     }

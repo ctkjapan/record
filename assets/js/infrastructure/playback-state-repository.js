@@ -1,3 +1,5 @@
+import { PlaybackSeconds } from '../domain/playback-seconds.js';
+
 // 選択レコードIDを保存するcookie名。
 const RECORD_ID_COOKIE = 'groove-record-index';
 // 音声ファイル上の再生秒数を保存するcookie名。
@@ -21,10 +23,9 @@ export class PlaybackStateRepository {
     load() {
         const recordId = this.readCookie(RECORD_ID_COOKIE);
         const storedSeconds = this.readCookie(PLAYBACK_SECONDS_COOKIE) ?? this.readCookie(LEGACY_PLAYBACK_COOKIE);
-        const playbackSeconds = Number(storedSeconds);
         return {
             recordId,
-            playbackSeconds: Number.isFinite(playbackSeconds) && playbackSeconds >= 0 ? playbackSeconds : 0,
+            playbackSeconds: new PlaybackSeconds(storedSeconds).value,
             noiseEnabled: this.readCookie(NOISE_ENABLED_COOKIE) === 'true',
             visualizerEnabled: this.readCookie(VISUALIZER_ENABLED_COOKIE) !== 'false',
         };
@@ -37,9 +38,7 @@ export class PlaybackStateRepository {
 
     /** 音声ファイル上の再生秒数をcookieへ保存する。 */
     savePlaybackSeconds(seconds) {
-        const value = Number(seconds);
-        const safeSeconds = Number.isFinite(value) && value >= 0 ? value : 0;
-        this.writeCookie(PLAYBACK_SECONDS_COOKIE, String(safeSeconds));
+        this.writeCookie(PLAYBACK_SECONDS_COOKIE, String(new PlaybackSeconds(seconds).value));
     }
 
     /** ノイズ音声の同期再生状態をcookieへ保存する。 */

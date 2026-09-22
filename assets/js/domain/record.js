@@ -2,7 +2,10 @@
 export class Record {
     /** JSONのレコード定義を検証し、表示用のアーティスト名と曲名を分離する。 */
     constructor({ id, title, color, audioUrl, imageUrl }) {
-        if (!id || !title || !color || !audioUrl || !imageUrl) throw new Error('レコード定義が不正です。');
+        const requiredFields = [id, title, color, audioUrl, imageUrl];
+        if (requiredFields.some((value) => typeof value !== 'string' || value.trim() === '')) {
+            throw new Error('レコード定義が不正です。');
+        }
         const [artist, ...titleParts] = title.split(' / ');
         this.id = id;
         this.title = title;

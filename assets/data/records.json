@@ -89,5 +89,12 @@
     "color": "#ffff04",
     "audioUrl": "assets/mp3/田中マイミ - Miracle Shopping 〜ドン・キホーテのテーマ〜.mp3",
     "imageUrl": "assets/images/田中マイミ - Miracle Shopping 〜ドン・キホーテのテーマ〜.webp"
+  },
+  {
+    "id": "014",
+    "title": "あいみょん / マリーゴールド",
+    "color": "#ec7507",
+    "audioUrl": "assets/mp3/あいみょん - マリーゴールド.mp3",
+    "imageUrl": "assets/images/あいみょん - マリーゴールド.jpg"
   }
 ]

@@ -1,9 +1,11 @@
+import { PlaybackSeconds } from './playback-seconds.js';
+
 /** 選択レコードに紐づく再生位置と音声表示設定を保持するドメイン状態。 */
 export class PlaybackSession {
     /** 保存済み状態を検証し、再生秒数を非負値へ補正する。 */
     constructor({ recordId = null, playbackSeconds = 0, noiseEnabled = false, visualizerEnabled = true } = {}) {
         this.recordId = recordId;
-        this.playbackSeconds = this.normalizeSeconds(playbackSeconds);
+        this.playbackSeconds = new PlaybackSeconds(playbackSeconds).value;
         this.noiseEnabled = Boolean(noiseEnabled);
         this.visualizerEnabled = Boolean(visualizerEnabled);
         Object.freeze(this);
@@ -57,11 +59,5 @@ export class PlaybackSession {
             noiseEnabled: this.noiseEnabled,
             visualizerEnabled: this.visualizerEnabled,
         };
-    }
-
-    /** 再生秒数を非負の有限値へ補正する。 */
-    normalizeSeconds(seconds) {
-        const value = Number(seconds);
-        return Number.isFinite(value) && value >= 0 ? value : 0;
     }
 }

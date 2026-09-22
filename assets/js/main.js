@@ -28,7 +28,7 @@ const RECORD_NOISE_SOURCE = 'assets/ogg/record_noise_loop.ogg';
 
 // cookieを介して選択レコードと再生秒数を永続化する実装。
 const playbackStateRepository = new PlaybackStateRepository();
-const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false });
+const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false, fetchImpl: globalThis.fetch });
 const playbackService = new PlaybackService({ audioEngine, playbackStateRepository });
 // 音声再生とプレーヤー画面を接続するController。
 const playerController = new RecordPlayerController({ playbackService });

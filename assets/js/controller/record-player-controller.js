@@ -1,9 +1,8 @@
 // ビジュアライザー描画の線幅。
 const VISUALIZER_BAR_LINE_WIDTH = 4;
 const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
-// 回転操作の慣性と速度表示を調整する画面設定。
+// 回転操作の慣性を調整する画面設定。
 const MOMENTUM_PERSISTENCE_RATE = 1;
-const ROTATION_SPEED_SCALE = 8;
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
@@ -282,8 +281,7 @@ export class RecordPlayerController {
     syncRotationToPlaybackRate() {
         const { playbackRate, direction: playbackDirection } = this.playbackService.audioState;
         const speedPercent = this.getRotationSpeedPercentForPlaybackRate(playbackRate);
-        const direction = playbackDirection === 'reverse' ? -1 : 1;
-        this.velocity = (speedPercent / ROTATION_SPEED_SCALE) * direction;
+        this.velocity = this.playbackService.rotationVelocityFromSpeedPercent(speedPercent, playbackDirection);
         this.setRotation(this.rotation + this.velocity);
     }
 
@@ -677,7 +675,7 @@ export class RecordPlayerController {
 
     /** 現在の回転入力速度を0〜100%へ変換する。 */
     getRotationSpeedPercent() {
-        return Math.min(Math.abs(this.velocity) * ROTATION_SPEED_SCALE, 100);
+        return this.playbackService.rotationSpeedPercentFromVelocity(this.velocity);
     }
 
     /** 回転速度の割合をWeb Audioの再生速度へ変換する。 */

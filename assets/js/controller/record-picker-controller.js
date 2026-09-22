@@ -1,4 +1,5 @@
 const PLAYER_STAGE_SWIPE_THRESHOLD = 48;
+const PICKER_WRAP_SWIPE_THRESHOLD = 48;
 
 /** レコード一覧の取得、選択状態、カード操作を担当する画面Controller。 */
 export class RecordPickerController {
@@ -38,7 +39,14 @@ export class RecordPickerController {
         this.pickerDragStartScrollLeft = 0;
         this.pickerDidDrag = false;
         this.pickerPointerStartIndex = null;
+        this.pickerPointerStartedAtFirst = false;
+        this.pickerPointerStartedAtLast = false;
         this.pickerSelectedOnPointerUp = false;
+        this.pickerTouchIdentifier = null;
+        this.pickerTouchStartX = 0;
+        this.pickerTouchStartedAtFirst = false;
+        this.pickerTouchStartedAtLast = false;
+        this.pickerSuppressClickIndex = null;
         // プレーヤーステージの左右スワイプ判定用状態。
         this.playerStagePointerId = null;
         this.playerStageSwipeStartX = 0;
@@ -93,6 +101,9 @@ export class RecordPickerController {
         this.pickerTrack.addEventListener('pointerup', (event) => this.releasePickerPointer(event));
         this.pickerTrack.addEventListener('pointercancel', (event) => this.releasePickerPointer(event));
         this.pickerTrack.addEventListener('lostpointercapture', (event) => this.releasePickerPointer(event));
+        this.pickerTrack.addEventListener('touchstart', (event) => this.handlePickerTouchStart(event), { passive: true });
+        this.pickerTrack.addEventListener('touchend', (event) => this.handlePickerTouchEnd(event), { passive: true });
+        this.pickerTrack.addEventListener('touchcancel', () => this.resetPickerTouch(), { passive: true });
         this.pickerTrack.addEventListener('click', (event) => this.handleClick(event));
     }
 
@@ -278,12 +289,15 @@ export class RecordPickerController {
 
     /** マウスドラッグの開始位置と対象カードを記録する。 */
     handlePointerDown(event) {
+        this.pickerSuppressClickIndex = null;
         if (event.pointerType !== 'mouse' || event.button !== 0) return;
         this.pickerPointerId = event.pointerId;
         this.pickerDragStartX = event.clientX;
         this.pickerDragStartScrollLeft = this.pickerTrack.scrollLeft;
         this.pickerDidDrag = false;
         this.pickerPointerStartIndex = Number(event.target.closest('.picker-card')?.dataset.recordIndex ?? NaN);
+        this.pickerPointerStartedAtFirst = this.focusedRecordIndex === 0;
+        this.pickerPointerStartedAtLast = this.focusedRecordIndex === this.records.length - 1;
         this.pickerTrack.setPointerCapture(this.pickerPointerId);
         this.pickerTrack.classList.add('is-dragging');
     }
@@ -299,12 +313,25 @@ export class RecordPickerController {
     /** ポインター解放時に、ドラッグでなければ中央カードを選択する。 */
     releasePickerPointer(event) {
         if (event.pointerId !== this.pickerPointerId) return;
+        const dragDistance = event.clientX - this.pickerDragStartX;
+        const shouldWrapToLast = event.type === 'pointerup'
+            && this.pickerDidDrag
+            && this.pickerPointerStartedAtFirst
+            && dragDistance >= PICKER_WRAP_SWIPE_THRESHOLD;
+        const shouldWrapToFirst = event.type === 'pointerup'
+            && this.pickerDidDrag
+            && this.pickerPointerStartedAtLast
+            && dragDistance <= -PICKER_WRAP_SWIPE_THRESHOLD;
         const shouldSelect = event.type === 'pointerup' && !this.pickerDidDrag && Number.isInteger(this.pickerPointerStartIndex);
         const selectedIndex = this.pickerPointerStartIndex;
         this.pickerPointerId = null;
         this.pickerPointerStartIndex = null;
+        this.pickerPointerStartedAtFirst = false;
+        this.pickerPointerStartedAtLast = false;
         this.pickerTrack.classList.remove('is-dragging');
         this.pickerDidDrag = false;
+        if (shouldWrapToLast) this.wrapPickerToRecord(this.records.length - 1, 0);
+        else if (shouldWrapToFirst) this.wrapPickerToRecord(0, this.records.length - 1);
         if (shouldSelect && selectedIndex === this.focusedRecordIndex) {
             this.selectRecord(selectedIndex);
             this.closePicker();
@@ -312,8 +339,60 @@ export class RecordPickerController {
         }
     }
 
+    /** 先頭カードから右へタッチスワイプしたときの開始状態を記録する。 */
+    handlePickerTouchStart(event) {
+        this.pickerSuppressClickIndex = null;
+        if (event.touches.length !== 1) {
+            this.resetPickerTouch();
+            return;
+        }
+        const touch = event.touches[0];
+        this.pickerTouchIdentifier = touch.identifier;
+        this.pickerTouchStartX = touch.clientX;
+        this.pickerTouchStartedAtFirst = this.focusedRecordIndex === 0;
+        this.pickerTouchStartedAtLast = this.focusedRecordIndex === this.records.length - 1;
+    }
+
+    /** 先頭端から右へスワイプした場合、末尾カードへフォーカスを循環する。 */
+    handlePickerTouchEnd(event) {
+        if (this.pickerTouchIdentifier === null) return;
+        const touch = Array.from(event.changedTouches).find(({ identifier }) => identifier === this.pickerTouchIdentifier);
+        if (!touch) return;
+        const swipeDistance = touch.clientX - this.pickerTouchStartX;
+        const shouldWrapToLast = event.type === 'touchend'
+            && this.pickerTouchStartedAtFirst
+            && swipeDistance >= PICKER_WRAP_SWIPE_THRESHOLD;
+        const shouldWrapToFirst = event.type === 'touchend'
+            && this.pickerTouchStartedAtLast
+            && swipeDistance <= -PICKER_WRAP_SWIPE_THRESHOLD;
+        this.resetPickerTouch();
+        if (shouldWrapToLast) this.wrapPickerToRecord(this.records.length - 1, 0);
+        else if (shouldWrapToFirst) this.wrapPickerToRecord(0, this.records.length - 1);
+    }
+
+    /** タッチスワイプ判定用の状態を消去する。 */
+    resetPickerTouch() {
+        this.pickerTouchIdentifier = null;
+        this.pickerTouchStartedAtFirst = false;
+        this.pickerTouchStartedAtLast = false;
+    }
+
+    /** 指定カードを中央へ移動してフォーカスし、スワイプ後の合成クリックを抑止する。 */
+    wrapPickerToRecord(index, suppressClickIndex) {
+        if (this.records.length < 2) return;
+        this.setFocusedRecord(index);
+        this.pickerCards[index]?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        this.pickerSuppressClickIndex = suppressClickIndex;
+    }
+
     /** 円盤クリックを選択操作または中央寄せ操作として処理する。 */
     handleClick(event) {
+        if (this.pickerSuppressClickIndex !== null) {
+            const clickedIndex = Number(event.target.closest('.picker-card')?.dataset.recordIndex ?? NaN);
+            const shouldSuppressClick = clickedIndex === this.pickerSuppressClickIndex;
+            this.pickerSuppressClickIndex = null;
+            if (shouldSuppressClick) return;
+        }
         if (this.pickerSelectedOnPointerUp) {
             this.pickerSelectedOnPointerUp = false;
             return;

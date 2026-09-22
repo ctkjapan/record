@@ -1,9 +1,18 @@
+import { Record } from './record.js';
+
 /** レコード一覧を管理し、存在するレコードだけを返すドメインモデル。 */
 export class RecordCatalog {
-    /** 空の一覧を拒否し、外部から配列を直接変更できないようにする。 */
+    /** 空の一覧、不正要素、重複IDを拒否し、配列を不変にする。 */
     constructor(records) {
         if (!Array.isArray(records) || records.length === 0) throw new Error('レコード一覧が空です。');
-        this.records = Object.freeze([...records]);
+        const entries = [...records];
+        if (entries.some((record) => !(record instanceof Record))) {
+            throw new Error('レコード一覧に不正な要素があります。');
+        }
+        if (new Set(entries.map((record) => record.id)).size !== entries.length) {
+            throw new Error('レコード一覧に重複したIDがあります。');
+        }
+        this.records = Object.freeze(entries);
     }
 
     /** 管理している全レコードを返す。 */

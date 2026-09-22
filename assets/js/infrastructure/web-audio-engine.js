@@ -1,3 +1,10 @@
+import { PlaybackSeconds } from '../domain/playback-seconds.js';
+import {
+    PlaybackDirection,
+    PLAYBACK_DIRECTION_FORWARD,
+    PLAYBACK_DIRECTION_REVERSE,
+} from '../domain/playback-direction.js';
+
 // 音声ロード進捗の段階を表す定数。
 const MIN_LOAD_PROGRESS = 0;
 const DOWNLOAD_PROGRESS_MAX = 80;
@@ -10,7 +17,7 @@ const VISUALIZER_SMOOTHING = 0.5;
 
 /** Web Audio APIを隠蔽し、音声の取得・デコード・再生状態を管理するインフラ実装。 */
 export class WebAudioEngine {
-    constructor({ noiseSourceUrl = null, noiseEnabled = false } = {}) {
+    constructor({ noiseSourceUrl = null, noiseEnabled = false, fetchImpl = globalThis.fetch } = {}) {
         // AudioContextと音声バッファのライフサイクルを管理する状態。
         this.audioContext = null;
         this.audioBuffer = null;
@@ -21,6 +28,8 @@ export class WebAudioEngine {
         this.audioLoadRequestId = 0;
         this.audioLoadController = null;
         this.audioBufferCache = new Map();
+        // 音声取得はインフラ境界から注入し、ブラウザーの実行コンテキストを保つ。
+        this.fetch = fetchImpl.bind(globalThis);
         // メイン音源と同期してループするノイズ音源の状態。
         this.noiseSourceUrl = noiseSourceUrl;
         this.noiseAudioBuffer = null;
@@ -37,7 +46,7 @@ export class WebAudioEngine {
         this.audioSourceStartTime = 0;
         this.audioSourceRate = 1;
         this.logicalSeconds = 0;
-        this.direction = 'forward';
+        this.direction = PLAYBACK_DIRECTION_FORWARD;
         this.isPlaying = false;
         // 再生開始待ちの重複処理を無効化するための要求番号と待機状態。
         this.playbackStartRequestId = 0;
@@ -200,9 +209,10 @@ export class WebAudioEngine {
 
     /** 正転／逆転を切り替え、再生中なら新しい方向で再接続する。 */
     setDirection(direction) {
-        if (direction === this.direction) return;
+        const normalizedDirection = new PlaybackDirection(direction).value;
+        if (normalizedDirection === this.direction) return;
         if (this.isPlaying) this.stopSource();
-        this.direction = direction;
+        this.direction = normalizedDirection;
         if (this.isPlaying) this.startSource();
     }
 
@@ -247,7 +257,7 @@ export class WebAudioEngine {
 
         const controller = typeof AbortController === 'function' ? new AbortController() : null;
         this.audioLoadController = controller;
-        this.audioLoadPromise = fetch(sourceUrl, controller ? { signal: controller.signal } : undefined)
+        this.audioLoadPromise = this.fetch(sourceUrl, controller ? { signal: controller.signal } : undefined)
             .then((response) => {
                 if (!response.ok) throw new Error(`音声の読み込みに失敗しました: ${response.status}`);
                 return this.readAudioResponse(response);
@@ -294,7 +304,7 @@ export class WebAudioEngine {
         if (this.noiseAudioBuffer) return this.noiseAudioBuffer;
         if (this.noiseLoadPromise) return this.noiseLoadPromise;
         const context = this.initializeAudioContext();
-        this.noiseLoadPromise = fetch(this.noiseSourceUrl)
+        this.noiseLoadPromise = this.fetch(this.noiseSourceUrl)
             .then((response) => {
                 if (!response.ok) throw new Error(`ノイズ音声の読み込みに失敗しました: ${response.status}`);
                 return this.readAudioResponse(response, () => {});
@@ -402,12 +412,12 @@ export class WebAudioEngine {
     startSource() {
         if (!this.isPlaying || !this.audioBuffer || !this.reversedAudioBuffer || !this.audioContext || this.audioSource) return;
         const duration = this.duration;
-        if (this.direction === 'reverse' && this.logicalSeconds <= 0) {
+        if (this.direction === PLAYBACK_DIRECTION_REVERSE && this.logicalSeconds <= 0) {
             // 0秒地点から逆再生する場合は、音声末尾へ循環して再生を開始する。
             this.logicalSeconds = duration;
         }
         const source = this.audioContext.createBufferSource();
-        source.buffer = this.direction === 'reverse' ? this.reversedAudioBuffer : this.audioBuffer;
+        source.buffer = this.direction === PLAYBACK_DIRECTION_REVERSE ? this.reversedAudioBuffer : this.audioBuffer;
         source.loop = true;
         source.loopStart = 0;
         source.loopEnd = duration;
@@ -419,7 +429,7 @@ export class WebAudioEngine {
         this.noiseSource = noiseSource;
         this.audioSourceStartedAt = this.audioContext.currentTime;
         this.audioSourceStartTime = this.logicalSeconds;
-        const offset = this.direction === 'reverse' ? duration - this.logicalSeconds : this.logicalSeconds;
+        const offset = this.direction === PLAYBACK_DIRECTION_REVERSE ? duration - this.logicalSeconds : this.logicalSeconds;
         source.start(0, Math.min(duration, Math.max(0, offset)));
         if (noiseSource) noiseSource.start(0, this.getNoiseOffset());
         this.isPlaybackStarting = false;
@@ -430,7 +440,7 @@ export class WebAudioEngine {
     createNoiseSource(outputNode) {
         if (!this.noiseEnabled || !this.noiseAudioBuffer || !this.reversedNoiseAudioBuffer) return null;
         const noiseSource = this.audioContext.createBufferSource();
-        noiseSource.buffer = this.direction === 'reverse' ? this.reversedNoiseAudioBuffer : this.noiseAudioBuffer;
+        noiseSource.buffer = this.direction === PLAYBACK_DIRECTION_REVERSE ? this.reversedNoiseAudioBuffer : this.noiseAudioBuffer;
         noiseSource.loop = true;
         noiseSource.loopStart = 0;
         noiseSource.loopEnd = this.noiseAudioBuffer.duration;
@@ -444,7 +454,7 @@ export class WebAudioEngine {
         const duration = this.noiseAudioBuffer?.duration || 0;
         if (duration <= 0) return 0;
         const normalizedSeconds = ((this.logicalSeconds % duration) + duration) % duration;
-        if (this.direction !== 'reverse' || normalizedSeconds === 0) return normalizedSeconds;
+        if (this.direction !== PLAYBACK_DIRECTION_REVERSE || normalizedSeconds === 0) return normalizedSeconds;
         return duration - normalizedSeconds;
     }
 
@@ -477,7 +487,7 @@ export class WebAudioEngine {
     syncCurrentSeconds() {
         if (!this.audioSource || !this.audioContext || this.duration <= 0) return;
         const elapsed = Math.max(0, this.audioContext.currentTime - this.audioSourceStartedAt);
-        const directionFactor = this.direction === 'reverse' ? -1 : 1;
+        const directionFactor = this.direction === PLAYBACK_DIRECTION_REVERSE ? -1 : 1;
         const nextSeconds = this.audioSourceStartTime + elapsed * this.audioSourceRate * directionFactor;
         this.logicalSeconds = ((nextSeconds % this.duration) + this.duration) % this.duration;
     }
@@ -514,8 +524,7 @@ export class WebAudioEngine {
 
     /** 再生秒数を0以上の有限値へ正規化する。 */
     normalizeSeconds(seconds) {
-        const value = Number(seconds);
-        return Number.isFinite(value) && value >= 0 ? value : 0;
+        return new PlaybackSeconds(seconds).value;
     }
 
     /** 再生秒数を音声の総時間以内へ制限する。 */
