@@ -3,6 +3,7 @@ import { RecordSelection } from '../domain/record-selection.js';
 
 /** レコード選択に関するドメインルールを画面操作から利用するアプリケーションサービス。 */
 export class RecordSelectionService {
+    /** 画面操作で使う選択状態が未初期化の状態から開始する。 */
     constructor() {
         this.selection = null;
     }

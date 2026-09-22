@@ -1,3 +1,4 @@
+/** ブランド表示、レコード選択、再生設定を含むヘッダーを描画する。 */
 export default function TopBar() {
     return (
         <header className='top-bar'>

@@ -4,6 +4,7 @@ import { Record } from '../domain/record.js';
 export class RecordJsonRepository {
     /** レコード定義JSONの取得先URLを保持する。 */
     constructor(url, { fetchImpl = globalThis.fetch } = {}) {
+        // 取得対象のJSON URLとブラウザーの実行環境に結び付けたfetch関数。
         this.url = url;
         this.fetch = fetchImpl.bind(globalThis);
     }

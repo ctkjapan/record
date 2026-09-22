@@ -15,7 +15,9 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /** 選択状態、再生秒数、音声設定をcookieへ保存・復元するリポジトリ。 */
 export class PlaybackStateRepository {
+    /** Cookieの読み書き先としてDocumentを受け取る。 */
     constructor({ documentRef = globalThis.document } = {}) {
+        // Cookieを読み書きするブラウザーDocument。
         this.document = documentRef;
     }
 

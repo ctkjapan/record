@@ -8,8 +8,10 @@ import { PlaybackTimeline } from '../domain/playback-timeline.js';
 export class PlaybackService {
     /** 音声ポートと状態保存ポートを受け取り、現在セッションを初期化する。 */
     constructor({ audioEngine, playbackStateRepository }) {
+        // 音声操作を委譲するエンジンと、再生状態を保存するリポジトリ。
         this.audioEngine = audioEngine;
         this.playbackStateRepository = playbackStateRepository;
+        // 永続化状態をドメイン型へ復元した現在の再生セッション。
         this.session = new PlaybackSession(playbackStateRepository.load());
     }
 
@@ -27,6 +29,7 @@ export class PlaybackService {
         };
     }
 
+    /** UI Controllerが参照する現在の音声状態を返す。 */
     get audioState() {
         return this.getAudioState();
     }
@@ -41,7 +44,7 @@ export class PlaybackService {
         return this.audioEngine.unlock();
     }
 
-    /** バックグラウンド復帰後に自動再生を継続できるか確認する。 */
+    /** 画面切替やブラウザー復帰時に自動再生を継続できるか確認する。 */
     isAutoplayAllowed() {
         return this.audioEngine.isAutoplayAllowed();
     }
@@ -51,30 +54,37 @@ export class PlaybackService {
         return this.audioEngine.setSource(sourceUrl, initialSeconds);
     }
 
+    /** 音声エンジンの現在の再生位置を秒で返す。 */
     getCurrentSeconds() {
         return this.audioEngine.getCurrentSeconds();
     }
 
+    /** ビジュアライザー用の周波数データを取得する。 */
     getFrequencyData() {
         return this.audioEngine.getFrequencyData();
     }
 
+    /** ビジュアライザー用の時間領域データを取得する。 */
     getTimeDomainData() {
         return this.audioEngine.getTimeDomainData();
     }
 
+    /** 音声エンジンで再生を開始する。 */
     play() {
         return this.audioEngine.play();
     }
 
+    /** 音声エンジンの再生を停止する。 */
     stop() {
         this.audioEngine.stop();
     }
 
+    /** 指定位置へ移動して音声エンジンの再生位置を更新する。 */
     seek(seconds) {
         this.audioEngine.seek(seconds);
     }
 
+    /** シーク確定前のプレビュー位置を音声エンジンへ伝える。 */
     previewSeek(seconds) {
         this.audioEngine.previewSeek(seconds);
     }
@@ -84,6 +94,7 @@ export class PlaybackService {
         return PlaybackTimeline.normalizePosition(seconds, this.audioEngine.duration);
     }
 
+    /** 再生方向を正規化して音声エンジンへ反映する。 */
     setDirection(direction) {
         const normalizedDirection = new PlaybackDirection(direction).value;
         this.audioEngine.setDirection(normalizedDirection);
@@ -133,46 +144,57 @@ export class PlaybackService {
         return transition;
     }
 
+    /** 再生速度をレコード回転速度の割合へ変換する。 */
     rotationSpeedPercentFromRate(rate) {
         return PlaybackPolicy.rotationSpeedPercentFromRate(rate);
     }
 
+    /** 回転速度の割合を音声再生速度へ変換する。 */
     rateFromRotationSpeedPercent(speedPercent) {
         return PlaybackPolicy.rateFromRotationSpeedPercent(speedPercent);
     }
 
+    /** 回転速度の割合と方向から符号付き速度を計算する。 */
     rotationVelocityFromSpeedPercent(speedPercent, direction) {
         return PlaybackPolicy.rotationVelocityFromSpeedPercent(speedPercent, direction);
     }
 
+    /** 符号付き回転速度を画面表示用の割合へ変換する。 */
     rotationSpeedPercentFromVelocity(velocity) {
         return PlaybackPolicy.rotationSpeedPercentFromVelocity(velocity);
     }
 
+    /** 回転角度差を最短方向の範囲へ補正する。 */
     normalizeRotationDelta(delta) {
         return PlaybackPolicy.normalizeRotationDelta(delta);
     }
 
+    /** 角度差と経過時間から回転速度を計算する。 */
     rotationVelocityFromDelta(delta, elapsedMilliseconds) {
         return PlaybackPolicy.rotationVelocityFromDelta(delta, elapsedMilliseconds);
     }
 
+    /** ポインター解放後に慣性回転を開始できる速度か判定する。 */
     shouldStartRotationMomentum(velocity) {
         return PlaybackPolicy.shouldStartRotationMomentum(velocity);
     }
 
+    /** 継続中の慣性速度が停止基準を下回ったか判定する。 */
     isRotationMomentumBelowThreshold(velocity) {
         return PlaybackPolicy.isRotationMomentumBelowThreshold(velocity);
     }
 
+    /** 回転方向と現在の再生方向から音声の再生方向を決める。 */
     resolveDirectionFromRotation(velocity) {
         return PlaybackPolicy.directionFromRotationVelocity(velocity, this.audioEngine.direction);
     }
 
+    /** 現在の再生速度が音声再生可能な範囲か判定する。 */
     isCurrentRatePlayable() {
         return new PlaybackRate(this.audioEngine.playbackRate).isPlayable;
     }
 
+    /** 再生速度の最小値をドメインルールから返す。 */
     get minimumPlaybackRate() {
         return new PlaybackRate().value;
     }

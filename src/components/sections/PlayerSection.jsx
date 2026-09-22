@@ -1,3 +1,4 @@
+/** レコード情報、回転操作、再生状態、音声コントロールを描画する。 */
 export default function PlayerSection() {
     return (
         <section id='PagePlayer'>

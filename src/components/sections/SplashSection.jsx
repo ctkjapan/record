@@ -1,3 +1,4 @@
+/** 初回タップによる音声有効化を案内するスプラッシュ画面を描画する。 */
 export default function SplashSection() {
     return (
         <section className='splash-screen' id='splashScreen' role='dialog' aria-modal='true' aria-labelledby='splashTitle' aria-describedby='splashStatus'>

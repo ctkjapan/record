@@ -1,7 +1,9 @@
+// プレーヤー画面のheroを再表示する間隔（10秒）。
 const HERO_REVEAL_INTERVAL_MS = 10_000;
 
 /** テキストを1文字ずつ下から表示するアニメーションController。 */
 export class TextRevealController {
+    /** テキスト表示対象を探すDocumentとタイマー制御用Windowを受け取る。 */
     constructor({ documentRef = document, windowRef = window } = {}) {
         this.document = documentRef;
         this.window = windowRef;
@@ -9,6 +11,7 @@ export class TextRevealController {
         this.splashScreen = this.document.querySelector('#splashScreen');
         this.splashTitle = this.document.querySelector('#splashTitle');
         this.hero = this.document.querySelector('#hero');
+        // hero表示を繰り返すsetIntervalの識別子。
         this.heroRevealInterval = null;
     }
 

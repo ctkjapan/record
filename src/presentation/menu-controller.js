@@ -2,11 +2,13 @@ const MENU_SWIPE_THRESHOLD = 48;
 
 /** ヘッダーメニューの開閉とキーボード操作を担当するController。 */
 export class MenuController {
+    /** メニューDOMと開閉操作に使う一時状態を初期化する。 */
     constructor() {
         // メニューを開閉するボタンと表示領域。
         this.menuButton = document.querySelector('#menuButton');
         this.menuPanel = document.querySelector('#menuPanel');
         this.pageBody = document.body;
+        // 閉じるアニメーションの完了待ち状態。
         this.isClosing = false;
         // メニュー上のポインター／タッチスワイプ判定用状態。
         this.menuPointerId = null;

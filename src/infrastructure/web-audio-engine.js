@@ -15,10 +15,12 @@ const REVERSE_BUFFER_PROGRESS_START = 92;
 const VISUALIZER_MIN_DECIBELS = -90;
 const VISUALIZER_MAX_DECIBELS = -10;
 const VISUALIZER_SMOOTHING = 0.5;
+// 自動再生権限確認時のAudioContext再開待ち時間。
 const AUTOPLAY_RESUME_TIMEOUT_MS = 1000;
 
 /** Web Audio APIを隠蔽し、音声の取得・デコード・再生状態を管理するインフラ実装。 */
 export class WebAudioEngine {
+    /** 音声URL、取得処理、自動再生ポリシーを調べるNavigatorを設定する。 */
     constructor({ noiseSourceUrl = null, noiseEnabled = false, fetchImpl = globalThis.fetch, navigatorRef = globalThis.navigator } = {}) {
         // AudioContextと音声バッファのライフサイクルを管理する状態。
         this.audioContext = null;
@@ -411,7 +413,7 @@ export class WebAudioEngine {
         this.audioUnlocked = true;
     }
 
-    /** バックグラウンド復帰後もユーザー操作なしで音声を再開できるか確認する。 */
+    /** ブラウザーの自動再生ポリシーに従い、音声を再開できるか確認する。 */
     async isAutoplayAllowed() {
         if (!this.audioUnlocked) return true;
         const context = this.audioContext;

@@ -1,3 +1,4 @@
+/** レコードカード一覧と選択位置・操作案内を表示する領域を描画する。 */
 export default function PickerSection() {
     return (
         <section id='PagePicker'>

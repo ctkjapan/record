@@ -1,12 +1,14 @@
-// ビジュアライザー描画の線幅。
+// ビジュアライザーの周波数バーと時間波形の描画線幅。
 const VISUALIZER_BAR_LINE_WIDTH = 4;
 const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
+// 再生中の時間表示と再生位置Cookieを更新する間隔。
 const AUDIO_TIME_UPDATE_INTERVAL_MS = 100;
-// 回転操作の慣性を調整する画面設定。
+// 慣性回転を維持する割合。1は速度を減衰させない設定。
 const MOMENTUM_PERSISTENCE_RATE = 1;
 
 /** レコード回転の入力を音声エンジンとプレーヤー表示へ反映するPresentation Controller。 */
 export class RecordPlayerController {
+    /** 再生ユースケースを受け取り、画面DOMと表示状態を初期化する。 */
     constructor({ playbackService }) {
         // 再生ユースケースと状態を提供するアプリケーションサービス。
         this.playbackService = playbackService;

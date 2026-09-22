@@ -3,14 +3,18 @@ const EDGE_SWIPE_GUARD_PX = 32;
 
 /** ブラウザー固有のページ復元とジェスチャー抑止を担当するPresentation Controller。 */
 export class BrowserInteractionController {
+    /** ブラウザーAPI、自動再生判定サービス、監視対象画面を受け取る。 */
     constructor({ windowRef = window, documentRef = document, ElementClass = Element, MutationObserverClass = globalThis.MutationObserver, playbackService = null, playerPanel = null, pickerPanel = null } = {}) {
+        // ブラウザーAPIと自動再生可否判定に使う依存関係。
         this.window = windowRef;
         this.document = documentRef;
         this.ElementClass = ElementClass;
         this.MutationObserverClass = MutationObserverClass;
         this.playbackService = playbackService;
+        // 自動再生可否を監視する2つの画面パネル。
         this.playerPanel = playerPanel;
         this.pickerPanel = pickerPanel;
+        // 非同期判定の同時実行を防ぐ状態。
         this.autoplayCheckPending = false;
     }
 
@@ -33,6 +37,7 @@ export class BrowserInteractionController {
     reloadWhenAutoplayIsUnavailable() {
         if (!this.playbackService || (!this.playerPanel && !this.pickerPanel)) return;
 
+        // フォーカス・表示復帰・画面切替から共通の判定処理を呼ぶ。
         const checkPermission = () => this.checkAutoplayPermission();
         this.document.addEventListener('visibilitychange', () => {
             if (!this.document.hidden) return checkPermission();
@@ -40,6 +45,7 @@ export class BrowserInteractionController {
         this.window.addEventListener('focus', checkPermission);
 
         if (this.MutationObserverClass) {
+            // hidden属性の切替を監視し、対象画面へ移動した時点で権限を確認する。
             this.screenObserver = new this.MutationObserverClass(checkPermission);
             [this.playerPanel, this.pickerPanel].filter(Boolean).forEach((panel) => {
                 this.screenObserver.observe(panel, { attributes: true, attributeFilter: ['hidden'] });

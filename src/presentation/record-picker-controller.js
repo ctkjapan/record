@@ -1,9 +1,13 @@
+// プレーヤー画面のスワイプを選択画面への移動とみなす距離（px）。
 const PLAYER_STAGE_SWIPE_THRESHOLD = 48;
+// 端から外向きへ循環移動する選択画面のスワイプ距離（px）。
 const PICKER_WRAP_SWIPE_THRESHOLD = 48;
+// 端から外向きの意図を通常の横スクロールより先に検出する距離（px）。
 const PICKER_WRAP_INTENT_THRESHOLD = 8;
 
 /** レコード一覧の取得、選択状態、カード操作を担当する画面Controller。 */
 export class RecordPickerController {
+    /** レコード取得・選択・再生を担当するサービスと画面連携処理を受け取る。 */
     constructor({ recordCatalogService, recordSelectionService, playerController, playbackService, openMenu = () => {}, textRevealController = null }) {
         // JSON一覧・プレーヤー・cookie保存を担当する依存オブジェクト。
         this.recordCatalogService = recordCatalogService;

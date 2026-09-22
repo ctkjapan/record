@@ -6,14 +6,19 @@ import {
 } from './playback-direction.js';
 import { RotationSpeedPercent } from './rotation-speed-percent.js';
 
-// 回転と音声再生を同期するためのドメインルール設定。
+// 回転と音声再生を同期するルール。平滑化率は速度追従の割合、スケールは回転速度換算係数。
 export const PLAYBACK_RATE_SMOOTHING = 0.1;
 export const ROTATION_SPEED_SCALE = 8;
+// 1倍速を保つ回転速度の割合の下限と上限。
 const MIN_CENTER_SPEED_PERCENT = 45;
 const MAX_CENTER_SPEED_PERCENT = 55;
+// 再生速度を目標値に到達したとみなす差分。
 const PLAYBACK_RATE_SETTLING_THRESHOLD = 0.01;
+// 回転速度のサンプルを標準フレーム時間に換算する基準。
 const ROTATION_VELOCITY_REFERENCE_FRAME_MS = 16;
+// 回転速度の計算で0除算を避ける最小サンプル時間。
 const MIN_ROTATION_SAMPLE_MS = 1;
+// 慣性回転を開始・継続するための最小速度。
 const ROTATION_MOMENTUM_THRESHOLD = 0.02;
 
 /** レコード回転と音声再生速度の変換ルールを提供するドメインサービス。 */

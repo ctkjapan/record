@@ -4,6 +4,7 @@ import { PlaybackSeconds } from './playback-seconds.js';
 export class PlaybackSession {
     /** 保存済み状態を検証し、再生秒数を非負値へ補正する。 */
     constructor({ recordId = null, playbackSeconds = 0, noiseEnabled = false, visualizerEnabled = true } = {}) {
+        // 選択レコード、再生位置、ノイズ・ビジュアライザーの設定状態。
         this.recordId = recordId;
         this.playbackSeconds = new PlaybackSeconds(playbackSeconds).value;
         this.noiseEnabled = Boolean(noiseEnabled);

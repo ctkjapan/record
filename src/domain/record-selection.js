@@ -2,9 +2,11 @@ import { RecordSelectionPolicy } from './record-selection-policy.js';
 
 /** レコード選択画面のフォーカス位置と確定選択位置を管理するドメイン状態。 */
 export class RecordSelection {
+    /** レコード件数と保存済みの選択位置から選択状態を作る。 */
     constructor(recordCount, selectedIndex = 0) {
         const normalizedIndex = RecordSelectionPolicy.normalizeIndex(selectedIndex, recordCount);
         if (normalizedIndex === null) throw new Error('レコード選択には1件以上必要です。');
+        // 一覧件数と、確定選択・現在フォーカス中の位置。
         this.recordCount = recordCount;
         this.selectedIndex = normalizedIndex;
         this.focusedIndex = normalizedIndex;
