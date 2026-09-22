@@ -8,17 +8,27 @@
 
 ```text
 index.html
+package.json
+vite.config.js
 src/
 ├── App.jsx
+├── components/
+│   ├── TopBar.jsx
+│   └── sections/
+│       ├── SplashSection.jsx
+│       ├── PlayerSection.jsx
+│       └── PickerSection.jsx
 ├── main.jsx
 ├── composition-root.js
-├── controller/
+├── presentation/
 ├── domain/
 ├── application/
-└── infrastructure/
+├── infrastructure/
+└── stylesheet/main.css
 assets/
-├── css/main.css
 ├── data/records.json
+├── ico/
+├── images/
 ├── mp3/
 └── ogg/record_noise_loop.ogg
 docs/
@@ -40,18 +50,19 @@ docs/
 | Infrastructure | `src/infrastructure/record-json-repository.js` | JSON取得 |
 | Infrastructure | `src/infrastructure/playback-state-repository.js` | cookie保存・復元 |
 | Infrastructure | `src/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
-| Presentation | `src/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
-| Presentation | `src/controller/browser-interaction-controller.js` | ページ復元、自動再生復帰、タッチジェスチャー、長押し制御 |
-| Presentation | `src/controller/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
-| Presentation | `src/controller/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
-| Presentation | `src/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
-| Presentation | `src/controller/menu-controller.js` | ヘッダーメニュー、メニューのスワイプ操作 |
-| UI | `src/App.jsx`、`src/main.jsx` | React画面とアプリ起動 |
+| Presentation | `src/presentation/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| Presentation | `src/presentation/browser-interaction-controller.js` | ページ復元、プレーヤー／選択画面での自動再生可否確認、タッチジェスチャー、長押し制御 |
+| Presentation | `src/presentation/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
+| Presentation | `src/presentation/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
+| Presentation | `src/presentation/text-reveal-controller.js` | 文字単位の表示アニメーション |
+| Presentation | `src/presentation/menu-controller.js` | ヘッダーメニュー、メニューのスワイプ操作 |
+| UI | `src/App.jsx`、`src/components/` | 画面構成、ヘッダー、各セクションのReact描画 |
+| UI起動 | `src/main.jsx` | React root、スタイル読み込み、Composition Rootの起動 |
 | Composition Root | `src/composition-root.js` | DDD依存関係の生成と接続 |
 
 ## 依存方向
 
-画面Controllerはドメインルール、cookie実装、Web Audio実装に直接依存せず、`PlaybackService`と`RecordCatalogService`を`composition-root.js`から注入します。`PlaybackService`は音声エンジンと状態保存リポジトリを調停し、Controllerへ音声状態の読み取りと操作を提供します。`BrowserInteractionController`がページ復元、自動再生復帰の確認、ブラウザー操作の抑止を担当し、`SplashController`の音声有効化も`PlaybackService`経由にします。Composition Rootの`src/composition-root.js`は各Controllerとサービスの生成・配線を担います。`window.RecordPlayer`は既存の選択処理との互換Facadeとして公開します。
+Presentation Controllerはドメインルール、cookie実装、Web Audio実装に直接依存せず、`PlaybackService`と`RecordCatalogService`を`composition-root.js`から注入します。`PlaybackService`は音声エンジンと状態保存リポジトリを調停し、Controllerへ音声状態の読み取りと操作を提供します。`BrowserInteractionController`がページ復元、自動再生復帰の確認、ブラウザー操作の抑止を担当し、`SplashController`の音声有効化も`PlaybackService`経由にします。Composition Rootの`src/composition-root.js`は各Controllerとサービスの生成・配線を担います。`window.RecordPlayer`は従来の外部呼び出しとの互換用に、音源切り替え・再生位置取得・停止を公開します。
 
 ## データの流れ
 
@@ -78,7 +89,7 @@ docs/
 - 先頭から右方向、末尾から左方向への循環先は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
 - 選択・フォーカス位置の状態遷移と有効範囲補正は`RecordSelection`へ集約し、Controllerは状態を画面表示へ反映する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。
-- React画面はCSSと既存画面Controllerが参照するDOM ID・ARIA属性を維持する。DOM操作の多いControllerは段階移行用にReact描画後のブリッジとして初期化する。
+- ReactコンポーネントはCSSとPresentation Controllerが参照するDOM ID・ARIA属性を維持する。DOMイベントを扱うControllerはReact描画後の画面ブリッジとして初期化する。
 
 ## cookie
 

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import { initializeApplication } from './composition-root.js';
-import '../assets/css/main.css';
+import './stylesheet/main.css';
 
 function VinylApplication() {
     useEffect(() => {

@@ -1,8 +1,8 @@
-# VINYL 仕様書
+# VINYL ドキュメント
 
-`index.html`で提供するインタラクティブなレコードプレーヤーの仕様です。
+画面・再生・選択の仕様、ソース構成、実行方法を機能別にまとめています。実装の最新状態と異なる記述を見つけた場合は、対応する機能資料とソースを照合してください。
 
-## ドキュメント
+## 仕様・開発資料
 
 - [画面構成](01_画面構成.md)
 - [レコード再生・回転操作](02_レコード再生.md)
@@ -10,42 +10,32 @@
 - [レスポンシブ・アクセシビリティ](04_レスポンシブとアクセシビリティ.md)
 - [JavaScript DDD構成](05_JavaScript_DDD構成.md)
 - [JavaScript DDD回帰テスト](06_JavaScript_DDD回帰テスト.md)
-- [Vite + React移行](07_Vite_React移行.md)
+- [Vite + React構成と起動](07_Vite_React構成と起動.md)
 
-## 対象ファイル
+## ソース案内
 
-| ファイル | 役割 |
+| パス | 役割 |
 | --- | --- |
-| `index.html` | ページ構造、表示テキスト、操作対象、ARIA属性 |
-| `src/App.jsx` | Reactで描画するページ、プレーヤー、選択画面 |
-| `src/main.jsx` | React rootとアプリケーション起動 |
-| `src/composition-root.js` | DDD依存関係の生成と初期化 |
-| `vite.config.js` | Reactプラグインと静的アセット出力 |
-| `src/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
-| `src/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
-| `src/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
-| `src/controller/record-player-controller.js` | レコード回転、慣性、シーク、表示、ラベル背景画像 |
-| `src/controller/record-picker-controller.js` | レコード選択画面とレコード情報の更新 |
-| `src/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
-| `src/domain/` | レコード、再生速度、再生方向、再生セッションのドメインルール |
-| `src/application/` | レコード一覧と再生状態のユースケース |
-| `src/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
-| `assets/css/main.css` | レイアウト、配色、レコード表現、レスポンシブ表示 |
-| `assets/data/records.json` | レコード定義、音声URL、ラベル背景画像URL |
-| `assets/mp3/` | レコード本編の音声ファイル |
-| `assets/ogg/record_noise_loop.ogg` | 同期再生するノイズ音声 |
+| `index.html` | ViteエントリーとReact root |
+| `src/App.jsx` | 画面コンポーネントの組み立て |
+| `src/components/TopBar.jsx` | ヘッダーとメニュー |
+| `src/components/sections/` | スプラッシュ、プレーヤー、レコード選択の画面 |
+| `src/main.jsx` | React root、CSS読み込み、アプリ起動 |
+| `src/stylesheet/main.css` | レイアウト、色、アニメーション、レスポンシブ表示 |
+| `src/presentation/` | DOMイベントと画面表示を担当するController |
+| `src/domain/` | レコード、選択、再生の業務ルール |
+| `src/application/` | レコード・再生ユースケース |
+| `src/infrastructure/` | JSON、cookie、Web Audio APIの実装 |
+| `src/composition-root.js` | 各層と画面Controllerの生成・接続 |
+| `assets/data/records.json` | レコード定義と表示・音声・画像の参照元 |
+| `assets/images/`、`assets/mp3/`、`assets/ogg/` | ラベル画像、楽曲、同期ノイズ音源 |
+| `vite.config.js` | GitHub Pagesのベースパスと静的ファイル出力 |
 
 ## 基本情報
 
-- ページ言語：日本語（`lang="ja"`）
-- タイトル：`VINYL`
-- 初期表示レコード：cookie保存値、保存値がない場合は`001 P4D / Dance!`
-- レコード数：`assets/data/records.json`の定義数（現在12件）
-- 音声方式：Web Audio API（`fetch` → `decodeAudioData`）
-- レコード音声：`assets/data/records.json`の`audioUrl`で指定
-- 背景画像：`assets/data/records.json`の`imageUrl`で指定し、`#label`と`PagePlayer`へ表示
-- ノイズ音声：`assets/ogg/record_noise_loop.ogg`
-- 保存cookie：レコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態
-- 外部フォント：Google Fontsの`DM Mono`、`Space Grotesk`
-- 外部データ：`assets/data/records.json`
+- 文書言語：日本語（`lang="ja"`）
+- アプリ名：VINYL
+- 音声：Web Audio API（`fetch`と`decodeAudioData`）
+- 保存：選択レコードID、再生秒数、ノイズ、ビジュアライザー状態をcookieへ保存
+- 外部フォント：Google FontsのDM Mono、Space Grotesk
 - サーバーAPI：なし

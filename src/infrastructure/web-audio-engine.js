@@ -127,6 +127,8 @@ export class WebAudioEngine {
             return buffer;
         }
 
+        // AudioBufferは非圧縮で大きいため、前の曲をキャッシュから解放する。
+        this.audioBufferCache.clear();
         this.playbackStartRequestId += 1;
         this.isPlaybackStarting = false;
         this.stopSource();
@@ -276,9 +278,8 @@ export class WebAudioEngine {
                 for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
                     const sourceChannel = buffer.getChannelData(channel);
                     const reversedChannel = this.reversedAudioBuffer.getChannelData(channel);
-                    for (let index = 0; index < sourceChannel.length; index += 1) {
-                        reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
-                    }
+                    reversedChannel.set(sourceChannel);
+                    reversedChannel.reverse();
                     this.updateLoadProgress(REVERSE_BUFFER_PROGRESS_START + ((channel + 1) / buffer.numberOfChannels) * (99 - REVERSE_BUFFER_PROGRESS_START));
                 }
                 this.updateLoadProgress(99);
@@ -330,9 +331,8 @@ export class WebAudioEngine {
         for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
             const sourceChannel = buffer.getChannelData(channel);
             const reversedChannel = reversedBuffer.getChannelData(channel);
-            for (let index = 0; index < sourceChannel.length; index += 1) {
-                reversedChannel[index] = sourceChannel[sourceChannel.length - index - 1];
-            }
+            reversedChannel.set(sourceChannel);
+            reversedChannel.reverse();
         }
         return reversedBuffer;
     }

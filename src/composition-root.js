@@ -4,15 +4,15 @@ import { RecordSelectionService } from './application/record-selection-service.j
 import { PlaybackStateRepository } from './infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from './infrastructure/record-json-repository.js';
 import { WebAudioEngine } from './infrastructure/web-audio-engine.js';
-import { RecordPickerController } from './controller/record-picker-controller.js';
-import { RecordPlayerController } from './controller/record-player-controller.js';
-import { SplashController } from './controller/splash-controller.js';
-import { MenuController } from './controller/menu-controller.js';
-import { TextRevealController } from './controller/text-reveal-controller.js';
-import { BrowserInteractionController } from './controller/browser-interaction-controller.js';
+import { RecordPickerController } from './presentation/record-picker-controller.js';
+import { RecordPlayerController } from './presentation/record-player-controller.js';
+import { SplashController } from './presentation/splash-controller.js';
+import { MenuController } from './presentation/menu-controller.js';
+import { TextRevealController } from './presentation/text-reveal-controller.js';
+import { BrowserInteractionController } from './presentation/browser-interaction-controller.js';
 
 // 全レコードに重ねて再生するノイズ音源。
-const RECORD_NOISE_SOURCE = 'assets/ogg/record_noise_loop.ogg';
+const RECORD_NOISE_SOURCE = './assets/ogg/record_noise_loop.ogg';
 
 /** React画面のDOMが描画された後にDDD層と画面Controllerを初期化する。 */
 export function initializeApplication() {
@@ -31,6 +31,7 @@ export function initializeApplication() {
     const browserInteractionController = new BrowserInteractionController({
         playbackService,
         playerPanel: document.querySelector('#playerPanel'),
+        pickerPanel: document.querySelector('#pickerPanel'),
     });
     browserInteractionController.initialize();
     // 音声再生とプレーヤー画面を接続するController。
@@ -52,7 +53,7 @@ export function initializeApplication() {
     });
 
     // JSONからレコード一覧を取得するアプリケーションサービス。
-    const recordCatalogService = new RecordCatalogService(new RecordJsonRepository('/assets/data/records.json'));
+    const recordCatalogService = new RecordCatalogService(new RecordJsonRepository('./assets/data/records.json'));
     const recordSelectionService = new RecordSelectionService();
     // 選択画面とプレーヤーControllerを依存性注入で接続する。
     const pickerController = new RecordPickerController({

@@ -1,6 +1,7 @@
 // ビジュアライザー描画の線幅。
 const VISUALIZER_BAR_LINE_WIDTH = 4;
 const VISUALIZER_WAVEFORM_LINE_WIDTH = 1;
+const AUDIO_TIME_UPDATE_INTERVAL_MS = 100;
 // 回転操作の慣性を調整する画面設定。
 const MOMENTUM_PERSISTENCE_RATE = 1;
 
@@ -42,7 +43,7 @@ export class RecordPlayerController {
         this.isAudioPlaying = false;
         this.isSeeking = false;
         this.pendingSeekSeconds = 0;
-        this.audioTimeFrame = null;
+        this.audioTimeTimer = null;
         this.visualizerFrame = null;
         this.visualizerEnabled = true;
         this.visualizerVisible = true;
@@ -332,17 +333,17 @@ export class RecordPlayerController {
         this.cancelPlaybackLoops();
     }
 
-    /** 再生中の現在秒数とcookie保存をアニメーションフレームごとに更新する。 */
+    /** 再生中の現在秒数とcookie保存を定期更新する。 */
     updateAudioTimeLoop() {
         if (!this.isAudioPlaying || !this.playbackService.audioState.isPlaying) {
             this.isAudioPlaying = false;
             this.updatePlayState();
-            this.audioTimeFrame = null;
+            this.audioTimeTimer = null;
             return;
         }
         this.updateAudioTime();
         this.persistPlaybackSeconds();
-        this.audioTimeFrame = requestAnimationFrame(() => this.updateAudioTimeLoop());
+        this.audioTimeTimer = window.setTimeout(() => this.updateAudioTimeLoop(), AUDIO_TIME_UPDATE_INTERVAL_MS);
     }
 
     /** AnalyserNodeの周波数データを使ってビジュアライザーを描画する。 */
@@ -495,9 +496,10 @@ export class RecordPlayerController {
                     this.updateVisualizer();
                 }
             });
-            cancelAnimationFrame(this.audioTimeFrame);
+            window.clearTimeout(this.audioTimeTimer);
             cancelAnimationFrame(this.visualizerFrame);
             this.visualizerFrame = null;
+            this.audioTimeTimer = null;
             this.updateAudioTimeLoop();
             this.scheduleVisualizer();
         } else {
@@ -509,9 +511,9 @@ export class RecordPlayerController {
 
     /** 再生位置とビジュアライザーのアニメーションを停止する。 */
     cancelPlaybackLoops() {
-        cancelAnimationFrame(this.audioTimeFrame);
+        window.clearTimeout(this.audioTimeTimer);
         cancelAnimationFrame(this.visualizerFrame);
-        this.audioTimeFrame = null;
+        this.audioTimeTimer = null;
         this.visualizerFrame = null;
         this.clearVisualizer();
     }
@@ -614,7 +616,7 @@ export class RecordPlayerController {
         cancelAnimationFrame(this.momentumFrame);
         this.momentumFrame = null;
         this.velocity = 0;
-        this.meterFill.style.width = '0%';
+        this.meterFill.style.transform = 'scaleX(0)';
         this.lastMeterWidth = '0%';
         this.targetPlaybackRate = this.playbackService.minimumPlaybackRate;
         if (!this.playbackRateFrame) this.playbackRateFrame = requestAnimationFrame(() => this.updatePlaybackRate());
@@ -638,7 +640,7 @@ export class RecordPlayerController {
         const speedPercent = this.getRotationSpeedPercent();
         const nextMeterWidth = `${speedPercent}%`;
         if (nextMeterWidth !== this.lastMeterWidth) {
-            this.meterFill.style.width = nextMeterWidth;
+            this.meterFill.style.transform = `scaleX(${speedPercent / 100})`;
             this.lastMeterWidth = nextMeterWidth;
         }
         if (!this.isManualPlaybackRate) this.targetPlaybackRate = this.getPlaybackRateForSpeed(speedPercent);

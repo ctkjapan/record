@@ -28,6 +28,7 @@ function copyPlayerAssets() {
 }
 
 export default defineConfig({
+    base: '/record/', 
     plugins: [react(), copyPlayerAssets()],
     publicDir: false,
 });

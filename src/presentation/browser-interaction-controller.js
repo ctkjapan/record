@@ -3,12 +3,15 @@ const EDGE_SWIPE_GUARD_PX = 32;
 
 /** ブラウザー固有のページ復元とジェスチャー抑止を担当するPresentation Controller。 */
 export class BrowserInteractionController {
-    constructor({ windowRef = window, documentRef = document, ElementClass = Element, playbackService = null, playerPanel = null } = {}) {
+    constructor({ windowRef = window, documentRef = document, ElementClass = Element, MutationObserverClass = globalThis.MutationObserver, playbackService = null, playerPanel = null, pickerPanel = null } = {}) {
         this.window = windowRef;
         this.document = documentRef;
         this.ElementClass = ElementClass;
+        this.MutationObserverClass = MutationObserverClass;
         this.playbackService = playbackService;
         this.playerPanel = playerPanel;
+        this.pickerPanel = pickerPanel;
+        this.autoplayCheckPending = false;
     }
 
     /** ページ復元、タッチジェスチャー、長押しのブラウザー操作を制御する。 */
@@ -26,20 +29,40 @@ export class BrowserInteractionController {
         });
     }
 
-    /** プレーヤー表示中にバックグラウンドから戻り、自動再生不可ならリロードする。 */
+    /** プレーヤー／選択画面で自動再生権限が失われた場合にリロードする。 */
     reloadWhenAutoplayIsUnavailable() {
-        if (!this.playbackService || !this.playerPanel) return;
-        let wasHidden = this.document.hidden === true;
-        this.document.addEventListener('visibilitychange', async () => {
-            if (this.document.hidden) {
-                wasHidden = true;
-                return;
-            }
-            if (!wasHidden) return;
-            wasHidden = false;
-            if (this.playerPanel.hidden) return;
-            if (!(await this.playbackService.isAutoplayAllowed())) this.window.location.reload();
+        if (!this.playbackService || (!this.playerPanel && !this.pickerPanel)) return;
+
+        const checkPermission = () => this.checkAutoplayPermission();
+        this.document.addEventListener('visibilitychange', () => {
+            if (!this.document.hidden) return checkPermission();
         });
+        this.window.addEventListener('focus', checkPermission);
+
+        if (this.MutationObserverClass) {
+            this.screenObserver = new this.MutationObserverClass(checkPermission);
+            [this.playerPanel, this.pickerPanel].filter(Boolean).forEach((panel) => {
+                this.screenObserver.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+            });
+        }
+    }
+
+    /** 対象画面が表示されている間だけ自動再生可否を調べる。 */
+    async checkAutoplayPermission() {
+        const isSupportedScreenVisible = [this.playerPanel, this.pickerPanel].some((panel) => panel && !panel.hidden);
+        if (this.document.hidden || !isSupportedScreenVisible || this.autoplayCheckPending) return;
+        this.autoplayCheckPending = true;
+        try {
+            let isAutoplayAllowed = false;
+            try {
+                isAutoplayAllowed = await this.playbackService.isAutoplayAllowed();
+            } catch {
+                // 判定不能時も権限を利用できない状態としてページを初期化する。
+            }
+            if (!isAutoplayAllowed) this.window.location.reload();
+        } finally {
+            this.autoplayCheckPending = false;
+        }
     }
 
     /** プルダウン更新と左右端からの履歴スワイプを無効化する。 */

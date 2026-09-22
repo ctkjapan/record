@@ -16,10 +16,10 @@ import { PlaybackTimeline } from '../src/domain/playback-timeline.js';
 import { RotationSpeedPercent } from '../src/domain/rotation-speed-percent.js';
 import { Record } from '../src/domain/record.js';
 import { RecordCatalog } from '../src/domain/record-catalog.js';
-import { BrowserInteractionController } from '../src/controller/browser-interaction-controller.js';
-import { RecordPickerController } from '../src/controller/record-picker-controller.js';
-import { TextRevealController } from '../src/controller/text-reveal-controller.js';
-import { SplashController } from '../src/controller/splash-controller.js';
+import { BrowserInteractionController } from '../src/presentation/browser-interaction-controller.js';
+import { RecordPickerController } from '../src/presentation/record-picker-controller.js';
+import { TextRevealController } from '../src/presentation/text-reveal-controller.js';
+import { SplashController } from '../src/presentation/splash-controller.js';
 import { PlaybackStateRepository } from '../src/infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from '../src/infrastructure/record-json-repository.js';
 import { WebAudioEngine } from '../src/infrastructure/web-audio-engine.js';
@@ -86,10 +86,11 @@ function createPlaybackService({
     };
 }
 
-function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDiscarded = false, playbackService = null, playerHidden = false } = {}) {
+function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDiscarded = false, playbackService = null, playerHidden = false, pickerHidden = true } = {}) {
     const windowListeners = new Map();
     const documentListeners = new Map();
     let reloadCount = 0;
+    let mutationObserverCallback = null;
     const windowRef = {
         innerWidth,
         scrollY,
@@ -100,10 +101,26 @@ function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDis
         wasDiscarded,
         hidden: false,
         addEventListener: (type, listener, options) => documentListeners.set(type, { listener, options }),
-        querySelector: (selector) => selector === '#playerPanel' ? { hidden: playerHidden } : null,
+        querySelector: (selector) => selector === '#playerPanel' ? playerPanel : selector === '#pickerPanel' ? pickerPanel : null,
     };
+    const playerPanel = { hidden: playerHidden };
+    const pickerPanel = { hidden: pickerHidden };
+    class FakeMutationObserver {
+        constructor(callback) {
+            mutationObserverCallback = callback;
+        }
+        observe() {}
+    }
     class FakeElement {}
-    const controller = new BrowserInteractionController({ windowRef, documentRef, ElementClass: FakeElement, playbackService, playerPanel: documentRef.querySelector('#playerPanel') });
+    const controller = new BrowserInteractionController({
+        windowRef,
+        documentRef,
+        ElementClass: FakeElement,
+        MutationObserverClass: FakeMutationObserver,
+        playbackService,
+        playerPanel,
+        pickerPanel,
+    });
     controller.initialize();
     return {
         controller,
@@ -112,6 +129,9 @@ function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDis
         FakeElement,
         windowListeners,
         documentListeners,
+        playerPanel,
+        pickerPanel,
+        notifyScreenChanged: () => mutationObserverCallback?.(),
         get reloadCount() {
             return reloadCount;
         },
@@ -772,7 +792,7 @@ test('browser interaction controller preserves page restoration reload behavior'
     assert.equal(fixture.reloadCount, 2);
 });
 
-test('browser interaction controller reloads the visible player if autoplay is unavailable after backgrounding', async () => {
+test('browser interaction controller reloads the visible player when autoplay becomes unavailable', async () => {
     let permissionChecks = 0;
     const fixture = createBrowserInteractionFixture({
         playbackService: { isAutoplayAllowed: async () => { permissionChecks++; return false; } },
@@ -788,19 +808,16 @@ test('browser interaction controller reloads the visible player if autoplay is u
     assert.equal(fixture.reloadCount, 1);
 });
 
-test('browser interaction controller skips autoplay reload outside the player or when permission remains available', async () => {
+test('browser interaction controller checks autoplay on both screens and preserves available permission', async () => {
     let permissionChecks = 0;
     const pickerFixture = createBrowserInteractionFixture({
         playbackService: { isAutoplayAllowed: async () => { permissionChecks++; return false; } },
         playerHidden: true,
+        pickerHidden: false,
     });
-    const pickerVisibilityChange = pickerFixture.documentListeners.get('visibilitychange').listener;
-    pickerFixture.documentRef.hidden = true;
-    await pickerVisibilityChange();
-    pickerFixture.documentRef.hidden = false;
-    await pickerVisibilityChange();
-    assert.equal(permissionChecks, 0);
-    assert.equal(pickerFixture.reloadCount, 0);
+    await pickerFixture.windowListeners.get('focus')();
+    assert.equal(permissionChecks, 1);
+    assert.equal(pickerFixture.reloadCount, 1);
 
     const playerFixture = createBrowserInteractionFixture({
         playbackService: { isAutoplayAllowed: async () => true },
@@ -811,6 +828,21 @@ test('browser interaction controller skips autoplay reload outside the player or
     playerFixture.documentRef.hidden = false;
     await playerVisibilityChange();
     assert.equal(playerFixture.reloadCount, 0);
+});
+
+test('browser interaction controller checks autoplay when changing between player and picker screens', async () => {
+    let permissionChecks = 0;
+    const fixture = createBrowserInteractionFixture({
+        playbackService: { isAutoplayAllowed: async () => { permissionChecks++; return false; } },
+    });
+
+    fixture.playerPanel.hidden = true;
+    fixture.pickerPanel.hidden = false;
+    fixture.notifyScreenChanged();
+    await Promise.resolve();
+
+    assert.equal(permissionChecks, 1);
+    assert.equal(fixture.reloadCount, 1);
 });
 
 test('browser interaction controller suppresses edge history swipes and top pull-to-refresh only', () => {
@@ -882,15 +914,16 @@ test('dependencies point inward and browser controllers do not import domain or 
         }
     };
 
-    assertNoForbiddenImports(collectFiles('src/domain'), /from\s+['"][^'"]*\/(?:application|infrastructure|controller)\//, 'outer layers');
-    assertNoForbiddenImports(collectFiles('src/application'), /from\s+['"][^'"]*\/(?:infrastructure|controller)\//, 'outer layers');
-    assertNoForbiddenImports(collectFiles('src/controller'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
+    assertNoForbiddenImports(collectFiles('src/domain'), /from\s+['"][^'"]*\/(?:application|infrastructure|presentation)\//, 'outer layers');
+    assertNoForbiddenImports(collectFiles('src/application'), /from\s+['"][^'"]*\/(?:infrastructure|presentation)\//, 'outer layers');
+    assertNoForbiddenImports(collectFiles('src/presentation'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
     const compositionRoot = readFileSync(join(projectRoot, 'src/composition-root.js'), 'utf8');
     assert.match(compositionRoot, /new BrowserInteractionController\(\{/);
     assert.match(compositionRoot, /playbackService,/);
     assert.match(compositionRoot, /playerPanel: document\.querySelector\('#playerPanel'\)/);
+    assert.match(compositionRoot, /pickerPanel: document\.querySelector\('#pickerPanel'\)/);
     assert.doesNotMatch(compositionRoot, /document\.addEventListener\(|window\.addEventListener\(/);
-    const splashController = readFileSync(join(projectRoot, 'src/controller/splash-controller.js'), 'utf8');
+    const splashController = readFileSync(join(projectRoot, 'src/presentation/splash-controller.js'), 'utf8');
     assert.match(splashController, /playbackService\.activateAudio\(\)/);
     assert.doesNotMatch(splashController, /audioEngine|infrastructure/);
 });
