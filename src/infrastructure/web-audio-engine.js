@@ -129,17 +129,11 @@ export class WebAudioEngine {
             return buffer;
         }
 
-        // AudioBufferは非圧縮で大きいため、前の曲をキャッシュから解放する。
-        this.audioBufferCache.clear();
         this.playbackStartRequestId += 1;
         this.isPlaybackStarting = false;
         this.stopSource();
-        this.abortLoading();
+        this.releaseCurrentTrackBuffers();
         this.audioSourceUrl = sourceUrl;
-        this.audioLoadRequestId += 1;
-        this.audioLoadPromise = null;
-        this.audioBuffer = null;
-        this.reversedAudioBuffer = null;
         this.logicalSeconds = requestedSeconds;
         this.setLoading(true, MIN_LOAD_PROGRESS);
 
@@ -495,16 +489,29 @@ export class WebAudioEngine {
                 // 再生終了済みのソースは停止処理を不要とする。
             }
             source.disconnect();
+            source.buffer = null;
         }
-        if (this.noiseSource) {
+        const noiseSource = this.noiseSource;
+        this.noiseSource = null;
+        if (noiseSource) {
             try {
-                this.noiseSource.stop();
+                noiseSource.stop();
             } catch {
                 // 再生終了済みのノイズソースは停止処理を不要とする。
             }
-            this.noiseSource.disconnect();
-            this.noiseSource = null;
+            noiseSource.disconnect();
+            noiseSource.buffer = null;
         }
+    }
+
+    /** 曲の切替時に旧曲の取得を中断し、正転・逆転バッファとキャッシュ参照を解放する。 */
+    releaseCurrentTrackBuffers() {
+        this.audioLoadRequestId += 1;
+        this.abortLoading();
+        this.audioBufferCache.clear();
+        this.audioLoadPromise = null;
+        this.audioBuffer = null;
+        this.reversedAudioBuffer = null;
     }
 
     /** AudioContextの経過時間から音声ファイル上の秒数を計算する。 */

@@ -11,15 +11,17 @@ DDDへの段階的な整理で、レコード再選択、再生位置の保存�
 ```sh
 npm test
 for file in $(rg --files src -g '*.js'); do node --check "$file" || exit 1; done
-git diff --check
+git diff HEAD --check
 ```
 
 ## 対象
 
 - 別レコード選択時の停止、再生秒数保存、秒数初期化、音源読み込み
+- 曲切替時のロード中断、正転・逆転バッファキャッシュ消去、停止済み音声ノードからの参照解除
 - `PlaybackSession`による同一レコード再選択時の位置維持と別レコード選択時の位置初期化
 - ビジュアライザー設定の状態遷移と他のセッション値の保持
 - 選択画面での先頭・末尾間の連続循環と、内側カード・不正位置での非循環
+- プレーヤーステージの左スワイプで次、右スワイプで前のレコードへ移動する方向と回転状態維持
 - フォーカス位置と確定選択位置の分離、範囲外インデックスの補正
 - 再生速度の補間係数と収束しきい値
 - 回転速度から再生方向への変換
@@ -36,6 +38,8 @@ git diff --check
 - コンポーネントのリージョン名とARIAラベル
 - JSON Repositoryのno-store取得、Domainモデルへの変換、HTTP・形式エラー
 - `RecordCatalogService`によるDomain集約の隠蔽と一覧・位置・ID検索境界
+- `RecordSelectionService`による選択状態更新、Catalog照会、再生切替の調停
+- レコード定義文字列をHTMLとして解釈せず、テキストとしてカードへ表示
 - cookie Repositoryの旧値fallback、異常値補正、保存・URLエンコード
 - Domain、Application、Presentation間の依存方向
 

@@ -1,4 +1,4 @@
-/** レコードカード一覧と選択位置・操作案内を表示する領域を描画する。 */
+/** レコード選択画面の見出しとカード一覧を描画する。 */
 export default function PickerSection() {
     return (
         <section id='PagePicker'>
@@ -14,13 +14,6 @@ export default function PickerSection() {
                 </div>
                 <div className='picker-window'>
                     <div className='picker-track' id='pickerTrack' />
-                </div>
-                <div className='picker-footer'>
-                    <p>
-                        <span id='pickerPosition'>01</span> / <span id='pickerPositionMax'>99</span>
-                    </p>
-                    <p id='pickerStatus'>中央のレコードをクリックして選択</p>
-                    <p className='picker-instruction'>DRAG TO BROWSE →</p>
                 </div>
             </div>
         </section>

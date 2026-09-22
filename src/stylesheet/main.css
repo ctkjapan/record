@@ -96,8 +96,7 @@ body {
 
   .album-index,
   .now-playing,
-  .player-footer,
-  .picker-footer {
+  .player-footer {
     font-family: "DM Mono", monospace;
   }
 
@@ -797,30 +796,6 @@ body {
         }
       }
 
-      .picker-footer {
-        display: none;
-        grid-template-columns: 1fr 2fr 1fr;
-        gap: 20px;
-        padding: 0 clamp(24px, 5vw, 72px);
-        font-size: .58rem;
-        letter-spacing: .08em;
-
-        & p {
-          margin: 0;
-        }
-
-        & span {
-          color: var(--accent-color);
-        }
-
-        & p:nth-child(2) {
-          text-align: center;
-        }
-
-        .picker-instruction {
-          text-align: right;
-        }
-      }
     }
   }
 

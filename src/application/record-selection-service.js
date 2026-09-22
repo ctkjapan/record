@@ -1,10 +1,14 @@
 import { RecordSelectionPolicy } from '../domain/record-selection-policy.js';
 import { RecordSelection } from '../domain/record-selection.js';
 
-/** レコード選択に関するドメインルールを画面操作から利用するアプリケーションサービス。 */
+/** レコード選択状態、Catalog照会、選択時の再生切替を調停するアプリケーションサービス。 */
 export class RecordSelectionService {
-    /** 画面操作で使う選択状態が未初期化の状態から開始する。 */
-    constructor() {
+    /** Domain状態、レコード照会、選択時の再生切替を担当するサービスを受け取る。 */
+    constructor({ recordCatalogService = null, playbackService = null } = {}) {
+        // 選択レコードを解決するCatalogと、再生状態を切り替えるApplication Service。
+        this.recordCatalogService = recordCatalogService;
+        this.playbackService = playbackService;
+        // 選択・フォーカス状態を保持するDomainモデル。
         this.selection = null;
     }
 
@@ -29,6 +33,24 @@ export class RecordSelectionService {
     select(index) {
         if (!this.selection) return this.getState();
         return this.selection.select(index);
+    }
+
+    /** 選択状態を更新し、対象レコードの取得と再生切替まで調停する。 */
+    selectRecord(index) {
+        if (!this.recordCatalogService || !this.playbackService) {
+            throw new Error('レコード選択の依存サービスが設定されていません。');
+        }
+        // Domainの選択状態を更新し、その位置から選択対象を解決する。
+        const selection = this.select(index);
+        const record = this.recordCatalogService.getRecordAt(selection.selectedIndex);
+        const { isRecordChanged } = this.playbackService.selectRecord(record);
+        return { ...selection, record, isRecordChanged };
+    }
+
+    /** 保存済みレコードIDに対応するCatalog位置を取得する。 */
+    indexOfRecordId(recordId) {
+        if (!this.recordCatalogService) throw new Error('レコード一覧サービスが設定されていません。');
+        return this.recordCatalogService.indexOfRecordId(recordId);
     }
 
     /** 現在のフォーカス位置を端から循環する。 */

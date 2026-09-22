@@ -245,6 +245,50 @@ test('selecting the same record keeps its saved position and does not stop playb
     assert.equal(service.getState().playbackSeconds, 12.5);
 });
 
+test('track changes release decoded audio caches and detach buffers from stopped source nodes', () => {
+    const engine = new WebAudioEngine({ fetchImpl: async () => ({ ok: true }) });
+    const forwardBuffer = { duration: 10 };
+    const reverseBuffer = { duration: 10 };
+    const requestController = new AbortController();
+    const oldSource = {
+        buffer: forwardBuffer,
+        stopCalled: false,
+        disconnectCalled: false,
+        stop() { this.stopCalled = true; },
+        disconnect() { this.disconnectCalled = true; },
+    };
+    const oldNoiseSource = {
+        buffer: reverseBuffer,
+        stopCalled: false,
+        disconnectCalled: false,
+        stop() { this.stopCalled = true; },
+        disconnect() { this.disconnectCalled = true; },
+    };
+    engine.audioBuffer = forwardBuffer;
+    engine.reversedAudioBuffer = reverseBuffer;
+    engine.audioBufferCache.set('assets/mp3/old.mp3', { forward: forwardBuffer, reverse: reverseBuffer });
+    engine.audioLoadPromise = Promise.resolve(forwardBuffer);
+    engine.audioLoadController = requestController;
+    engine.audioSource = oldSource;
+    engine.noiseSource = oldNoiseSource;
+
+    engine.stopSource(false);
+    engine.releaseCurrentTrackBuffers();
+
+    assert.equal(oldSource.stopCalled, true);
+    assert.equal(oldSource.disconnectCalled, true);
+    assert.equal(oldSource.buffer, null);
+    assert.equal(oldNoiseSource.stopCalled, true);
+    assert.equal(oldNoiseSource.disconnectCalled, true);
+    assert.equal(oldNoiseSource.buffer, null);
+    assert.equal(engine.audioBufferCache.size, 0);
+    assert.equal(engine.audioBuffer, null);
+    assert.equal(engine.reversedAudioBuffer, null);
+    assert.equal(engine.audioLoadPromise, null);
+    assert.equal(requestController.signal.aborted, true);
+    assert.equal(engine.audioLoadRequestId, 1);
+});
+
 test('playback rate smoothing preserves the former 0.1 step and 0.01 settling threshold', () => {
     const { service, engineCalls } = createPlaybackService({ playbackRate: 1 });
 
@@ -591,6 +635,34 @@ test('RecordSelection keeps focus and selected record separate and normalizes fo
     assert.throws(() => new RecordSelection(0), /1件以上/);
 });
 
+test('RecordSelectionService coordinates selection state, catalog lookup, and playback change', () => {
+    const records = [{ id: 'record-a' }, { id: 'record-b' }];
+    const playbackCalls = [];
+    const recordCatalogService = {
+        getRecordAt: (index) => records[index],
+        indexOfRecordId: (recordId) => records.findIndex((record) => record.id === recordId),
+    };
+    const playbackService = {
+        selectRecord: (record) => {
+            playbackCalls.push(record);
+            return { isRecordChanged: record.id === 'record-b' };
+        },
+    };
+    const service = new RecordSelectionService({ recordCatalogService, playbackService });
+    service.initialize(records.length, 0);
+
+    const result = service.selectRecord(1);
+
+    assert.deepEqual(result, {
+        selectedIndex: 1,
+        focusedIndex: 1,
+        record: records[1],
+        isRecordChanged: true,
+    });
+    assert.deepEqual(playbackCalls, [records[1]]);
+    assert.equal(service.indexOfRecordId('record-b'), 1);
+});
+
 test('record picker accepts the opposite edge swipe immediately after wrapping', () => {
     const controller = Object.create(RecordPickerController.prototype);
     const wrappedIndices = [];
@@ -628,6 +700,82 @@ test('record picker leaves an interior horizontal swipe to native scrolling', ()
     controller.handlePickerTouchMove(move);
 
     assert.equal(move.defaultPrevented, undefined);
+});
+
+test('player stage maps a left swipe to next and a right swipe to previous', () => {
+    const directions = [];
+    const selections = [];
+    const controller = Object.create(RecordPickerController.prototype);
+    controller.recordSelectionService = {
+        getAdjacentSelectedIndex(direction) {
+            directions.push(direction);
+            return direction === 'right' ? 1 : 0;
+        },
+    };
+    controller.selectRecord = (index, options) => selections.push({ index, options });
+
+    controller.handlePlayerStageSwipe(-100, 0);
+    controller.handlePlayerStageSwipe(100, 0);
+
+    assert.deepEqual(directions, ['right', 'left']);
+    assert.deepEqual(selections, [
+        { index: 1, options: { preserveRotation: true } },
+        { index: 0, options: { preserveRotation: true } },
+    ]);
+});
+
+test('record picker renders catalog strings as text instead of parsing them as HTML', () => {
+    const makeElement = (tagName) => ({
+        tagName,
+        children: [],
+        attributes: {},
+        dataset: {},
+        style: {
+            properties: {},
+            setProperty(name, value) { this.properties[name] = value; },
+        },
+        setAttribute(name, value) { this.attributes[name] = value; },
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        textContent: '',
+        className: '',
+    });
+    const documentRef = {
+        createElement: makeElement,
+        createTextNode: (textContent) => ({ tagName: '#text', textContent }),
+    };
+    const record = new Record({
+        id: 'record-a',
+        title: '<img src=x onerror=alert(1)> / <svg onload=alert(2)>',
+        color: '#345678',
+        audioUrl: 'assets/mp3/a.mp3',
+        imageUrl: 'assets/images/a.webp',
+    });
+    const controller = Object.create(RecordPickerController.prototype);
+    const selectionService = new RecordSelectionService();
+    selectionService.initialize(1, 0);
+    controller.recordSelectionService = selectionService;
+    controller.records = [record];
+    controller.albumMaxNumber = { textContent: '' };
+    controller.pickerTrack = { children: [], replaceChildren(...children) { this.children = children; } };
+
+    const previousDocument = globalThis.document;
+    globalThis.document = documentRef;
+    try {
+        controller.renderPicker();
+    } finally {
+        if (previousDocument === undefined) delete globalThis.document;
+        else globalThis.document = previousDocument;
+    }
+
+    const [card] = controller.pickerTrack.children;
+    assert.equal(card.tagName, 'button');
+    assert.equal(card.attributes['aria-label'], `${record.title}を選択`);
+    assert.equal(card.children.some((child) => child.tagName === 'img' || child.tagName === 'svg'), false);
+    assert.equal(card.children[1].children[0].textContent, 'record-a');
+    assert.equal(card.children[1].children[1].textContent, '<img src=x onerror=alert(1)>');
+    assert.equal(card.children[1].children[2].textContent, '<svg onload=alert(2)>');
+    assert.equal(card.children[0].style.properties['--disc-color'], '#345678');
 });
 
 test('hero text reveal pauses while the picker overlays the player and resumes on return', () => {
@@ -954,6 +1102,8 @@ test('dependencies point inward and browser controllers do not import domain or 
     assertNoForbiddenImports(collectFiles('src/presentation'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
     const pickerController = readFileSync(join(projectRoot, 'src/presentation/record-picker-controller.js'), 'utf8');
     assert.doesNotMatch(pickerController, /this\.catalog\.(?:all|at|indexOfId)\(/, 'Presentation must query the catalog through its application service');
+    assert.doesNotMatch(pickerController, /this\.(?:recordCatalogService\.getRecordAt|playbackService\.selectRecord)\(/, 'selection orchestration belongs to the application service');
+    assert.doesNotMatch(pickerController, /pickerTrack\.innerHTML/, 'catalog data must be rendered as text nodes');
     const playerSection = readFileSync(join(projectRoot, 'src/components/sections/PlayerSection.jsx'), 'utf8');
     const pickerSection = readFileSync(join(projectRoot, 'src/components/sections/PickerSection.jsx'), 'utf8');
     assert.match(playerSection, /id='hero' className='hero' aria-labelledby='pageTitle'/);

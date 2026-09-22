@@ -26,10 +26,7 @@ export class RecordPickerController {
         this.changeButton = document.querySelector('#changeButton');
         this.pickerPanel = document.querySelector('#pickerPanel');
         this.pickerTrack = document.querySelector('#pickerTrack');
-        this.pickerPosition = document.querySelector('#pickerPosition');
-        this.pickerStatus = document.querySelector('#pickerStatus');
         this.albumMaxNumber = document.querySelector('#albumMaxNumber');
-        this.pickerPositionMax = document.querySelector('#pickerPositionMax');
         this.albumNumber = document.querySelector('#albumNumber');
         this.albumArtist = document.querySelector('#albumArtist');
         this.albumTitle = document.querySelector('#albumTitle');
@@ -77,8 +74,8 @@ export class RecordPickerController {
             this.renderPicker();
             this.selectRecord(selectedIndex);
             this.changeButton.disabled = false;
-        } catch {
-            this.pickerStatus.textContent = 'レコード一覧を読み込めませんでした';
+        } catch (error) {
+            console.error('レコード一覧を読み込めませんでした。', error);
         }
     }
 
@@ -205,7 +202,7 @@ export class RecordPickerController {
             return;
         }
         if (this.isHorizontalPlayerStageSwipe(deltaX, deltaY)) {
-            const direction = deltaX > 0 ? 'right' : 'left';
+            const direction = deltaX > 0 ? 'left' : 'right';
             const nextIndex = this.recordSelectionService.getAdjacentSelectedIndex(direction);
             if (nextIndex !== null) this.selectRecord(nextIndex, { preserveRotation: true });
         }
@@ -213,14 +210,13 @@ export class RecordPickerController {
 
     /** cookieのレコードIDを一覧内の配列位置へ変換する。 */
     getStoredRecordIndex() {
-        return this.recordCatalogService.indexOfRecordId(this.playbackService.getState().recordId);
+        return this.recordSelectionService.indexOfRecordId(this.playbackService.getState().recordId);
     }
 
-    /** レコード件数を画面の分母表示へ反映する。 */
+    /** レコード件数をプレーヤーの分母表示へ反映する。 */
     updateRecordCount() {
         const recordCount = String(this.records.length).padStart(2, '0');
         this.albumMaxNumber.textContent = recordCount;
-        this.pickerPositionMax.textContent = recordCount;
     }
 
     /** 現在カード中央へフォーカスしているレコード位置を返す。 */
@@ -233,32 +229,48 @@ export class RecordPickerController {
         return this.recordSelectionService.getState().selectedIndex;
     }
 
-    /** レコード一覧から選択カードのHTMLを生成する。 */
+    /** レコード情報をテキストとして設定した選択カードDOMを生成する。 */
     renderPicker() {
         this.updateRecordCount();
-        this.pickerTrack.innerHTML = this.records
-            .map(
-                (record, index) => `
-    <button class="picker-card${index === this.selectedRecordIndex ? ' is-selected' : ''}${index === this.focusedRecordIndex ? ' is-focused' : ''}" type="button" data-record-index="${index}" data-display-index="${String(index + 1).padStart(2, '0')} / ${String(this.records.length).padStart(2, '0')}" aria-label="${record.title}を選択">
-      <span class="picker-disc" style="--disc-color: ${record.color}"></span>
-      <p>${record.id}<span class="picker-track-artist">${record.artist}</span><span class="picker-track-title">${record.trackTitle}</span></p>
-    </button>
-  `,
-            )
-            .join('');
-        this.pickerCards = [...this.pickerTrack.querySelectorAll('.picker-card')];
+        // DOMへ反映する選択位置とフォーカス位置を描画前に固定する。
+        const selectedIndex = this.selectedRecordIndex;
+        const focusedIndex = this.focusedRecordIndex;
+        // Catalogの表示値はHTML文字列へ連結せず、各DOM要素のテキストとして設定する。
+        this.pickerCards = this.records.map((record, index) => {
+            const card = document.createElement('button');
+            card.className = `picker-card${index === selectedIndex ? ' is-selected' : ''}${index === focusedIndex ? ' is-focused' : ''}`;
+            card.type = 'button';
+            card.dataset.recordIndex = String(index);
+            card.dataset.displayIndex = `${String(index + 1).padStart(2, '0')} / ${String(this.records.length).padStart(2, '0')}`;
+            card.setAttribute('aria-label', `${record.title}を選択`);
+
+            const disc = document.createElement('span');
+            disc.className = 'picker-disc';
+            disc.style.setProperty('--disc-color', record.color);
+
+            const details = document.createElement('p');
+            details.append(document.createTextNode(record.id));
+            const artist = document.createElement('span');
+            artist.className = 'picker-track-artist';
+            artist.textContent = record.artist;
+            const title = document.createElement('span');
+            title.className = 'picker-track-title';
+            title.textContent = record.trackTitle;
+            details.append(artist, title);
+            card.append(disc, details);
+            return card;
+        });
+        this.pickerTrack.replaceChildren(...this.pickerCards);
     }
 
-    /** 中央に表示するカードを更新し、位置と案内文を変更する。 */
+    /** 中央に表示するカードを更新する。 */
     setFocusedRecord(index) {
         const previousFocusedIndex = this.focusedRecordIndex;
-        const { focusedIndex, selectedIndex } = this.recordSelectionService.focus(index);
+        const { focusedIndex } = this.recordSelectionService.focus(index);
         if (previousFocusedIndex !== focusedIndex) {
             this.pickerCards[previousFocusedIndex]?.classList.remove('is-focused');
             this.pickerCards[focusedIndex]?.classList.add('is-focused');
         }
-        this.pickerPosition.textContent = String(focusedIndex + 1).padStart(2, '0');
-        this.pickerStatus.textContent = focusedIndex === selectedIndex ? '中央のレコードをクリックして選択' : `${this.records[focusedIndex].title} をクリックして変更`;
     }
 
     /** レコード選択ユースケースを実行し、選択画面の表示を同期する。 */
@@ -267,9 +279,7 @@ export class RecordPickerController {
         const previousFocusedIndex = this.focusedRecordIndex;
         const wasPlaying = preserveRotation && (this.playerController.isAudioPlaying || this.playbackService.audioState.isPlaying);
         const playbackState = preserveRotation ? this.playbackService.audioState : null;
-        const { selectedIndex } = this.recordSelectionService.select(index);
-        const record = this.recordCatalogService.getRecordAt(selectedIndex);
-        const { isRecordChanged } = this.playbackService.selectRecord(record);
+        const { selectedIndex, record, isRecordChanged } = this.recordSelectionService.selectRecord(index);
         if (isRecordChanged && !preserveRotation) this.playerController.resetForRecordChange();
         if (isRecordChanged && preserveRotation && playbackState) {
             this.playbackService.setDirection(playbackState.direction);
@@ -290,8 +300,6 @@ export class RecordPickerController {
             this.pickerCards[previousFocusedIndex]?.classList.remove('is-focused');
             this.pickerCards[selectedIndex]?.classList.add('is-focused');
         }
-        this.pickerPosition.textContent = String(selectedIndex + 1).padStart(2, '0');
-        this.pickerStatus.textContent = `${record.title} を再生中`;
     }
 
     /** 選択画面を開き、現在のレコードを中央へスクロールする。 */

@@ -45,11 +45,11 @@ docs/
 | Domain | `src/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
 | Domain | `src/domain/playback-timeline.js` | 再生位置の補正、ループ位置計算、副音源の方向・位相同期 |
 | Application | `src/application/record-catalog-service.js` | レコード一覧の読み込みと集約への問い合わせ |
-| Application | `src/application/record-selection-service.js` | 選択状態を初期化・更新しDomainルールを画面操作へ提供 |
+| Application | `src/application/record-selection-service.js` | 選択状態を更新し、Catalog照会と選択レコードの再生切替を調停 |
 | Application | `src/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
 | Infrastructure | `src/infrastructure/record-json-repository.js` | JSON取得 |
 | Infrastructure | `src/infrastructure/playback-state-repository.js` | cookie保存・復元 |
-| Infrastructure | `src/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
+| Infrastructure | `src/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファの取得・切替時解放、正転・逆転再生、ノイズ同期、解析データ |
 | Presentation | `src/presentation/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
 | Presentation | `src/presentation/browser-interaction-controller.js` | ページ復元、プレーヤー／選択画面での自動再生可否確認、タッチジェスチャー、長押し制御 |
 | Presentation | `src/presentation/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
@@ -71,7 +71,7 @@ Presentation Controllerはドメインルール、cookie実装、Web Audio実装
 3. `SplashController`がスプラッシュを表示し、初回クリックで`PlaybackService`へ音声有効化を依頼する。
 4. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
 5. `RecordCatalogService`が`RecordCatalog`を生成して内部に保持し、Presentation向けにレコード配列とID・位置による問い合わせを提供する。
-6. `RecordPickerController`が`PlaybackService`へレコード選択ユースケースを依頼し、サービスが必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
+6. `RecordPickerController`が`RecordSelectionService`へ選択ユースケースを依頼する。サービスがDomain選択状態を更新し、Catalogからレコードを取得して`PlaybackService`へ再生切替を依頼する。`PlaybackService`は必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
    フォーカス位置と確定選択位置は`RecordSelection`が保持し、端循環先とインデックス範囲は`RecordSelectionPolicy`が決定する。
 7. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
 8. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
@@ -88,6 +88,7 @@ Presentation Controllerはドメインルール、cookie実装、Web Audio実装
 - 角度境界での最短回転差補正、慣性の開始・停止しきい値、入力時間を正規化した角速度の算出、速度補間、回転方向から再生方向への変換、速度と回転割合の変換は`PlaybackPolicy`に集約する。
 - 選択画面の端循環とプレーヤー画面からの隣接レコード循環は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
 - 選択・フォーカス位置の状態遷移と有効範囲補正は`RecordSelection`へ集約し、Controllerは状態を画面表示へ反映する。
+- 確定選択時のDomain状態更新、Catalog参照、再生切替の調停は`RecordSelectionService`で行い、Presentation Controllerは選択結果をDOMへ反映する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。
 - `RecordCatalog`集約は`RecordCatalogService`内に保持し、Presentation Controllerは集約の検索・取得をサービス経由で行う。
 - ReactコンポーネントはCSSとPresentation Controllerが参照するDOM ID・ARIA属性を維持する。DOMイベントを扱うControllerはReact描画後の画面ブリッジとして初期化する。

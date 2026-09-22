@@ -31,7 +31,7 @@ function copyPlayerAssets() {
 
 export default defineConfig({
     // アプリを /record/ パス配下で配信する。
-    base: '/record/', 
+    base: '/record/',
     // Reactプラグインと静的アセット複製プラグインを有効にする。
     plugins: [react(), copyPlayerAssets()],
     // Vite標準のpublicディレクトリを使わず、上記フックでアセットを配置する。

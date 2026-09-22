@@ -54,7 +54,8 @@ export function initializeApplication() {
 
     // JSONからレコード一覧を取得するアプリケーションサービス。
     const recordCatalogService = new RecordCatalogService(new RecordJsonRepository('./assets/data/records.json'));
-    const recordSelectionService = new RecordSelectionService();
+    // Domain選択、Catalog照会、選択レコードの再生切替を調停するアプリケーションサービス。
+    const recordSelectionService = new RecordSelectionService({ recordCatalogService, playbackService });
     // 選択画面とプレーヤーControllerを依存性注入で接続する。
     const pickerController = new RecordPickerController({
         recordCatalogService,
