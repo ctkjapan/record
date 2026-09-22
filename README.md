@@ -20,13 +20,14 @@
 
 ## 起動方法
 
-MP3を`fetch`で読み込むため、ローカルHTTPサーバー経由で起動します。
+開発サーバーを起動します。
 
 ```sh
-python3 -m http.server 8000
+npm install
+npm run dev
 ```
 
-ブラウザで<http://localhost:8000/>を開いてください。
+本番向けファイルは`npm run build`で`dist/`へ生成し、`npm run preview`で確認できます。
 
 ## 操作方法
 
@@ -46,26 +47,30 @@ python3 -m http.server 8000
 
 | パス | 役割 |
 | --- | --- |
-| `index.html` | ページ構造、操作対象、ARIA属性 |
-| `assets/js/main.js` | DDD各層の依存関係を構成して初期化 |
-| `assets/js/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
-| `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
-| `assets/js/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
-| `assets/js/controller/record-player-controller.js` | 回転、慣性、シーク、プレーヤー表示 |
-| `assets/js/controller/record-picker-controller.js` | レコード選択画面、表示情報の更新 |
-| `assets/js/controller/text-reveal-controller.js` | `splashTitle`・`hero`の文字アニメーション |
-| `assets/js/domain/` | レコードと再生操作のドメインルール |
-| `assets/js/application/` | レコード一覧と再生状態のユースケース |
-| `assets/js/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
+| `index.html` | Viteエントリーとアプリのroot要素 |
+| `src/App.jsx` | Reactで描画するページ・プレーヤー・選択画面 |
+| `src/main.jsx` | React root、スタイル、アプリ起動 |
+| `vite.config.js` | Reactプラグインと本番用静的アセットコピー |
+| `src/composition-root.js` | DDD各層の依存関係を構成して初期化 |
+| `src/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
+| `src/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| `src/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
+| `src/controller/record-player-controller.js` | 回転、慣性、シーク、プレーヤー表示 |
+| `src/controller/record-picker-controller.js` | レコード選択画面、表示情報の更新 |
+| `src/controller/text-reveal-controller.js` | `splashTitle`・`hero`の文字アニメーション |
+| `src/domain/` | レコードと再生操作のドメインルール |
+| `src/application/` | レコード一覧と再生状態のユースケース |
+| `src/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
 | `assets/data/records.json` | レコード定義、音声URL、ラベル背景画像URL |
 | `assets/css/main.css` | レイアウト、配色、レコード表現、操作制御 |
 | `assets/mp3/` | レコード本編の音声ファイル |
 | `assets/ogg/record_noise_loop.ogg` | 同期再生するノイズ音声 |
+| `docs/07_Vite_React移行.md` | React/Vite構成と起動方法 |
 | `docs/` | 機能別の仕様書 |
 
 ## 音声再生
 
-Web Audio APIを使用します。レコード音声は`assets/data/records.json`の`audioUrl`、`label`と`PagePlayer`の背景画像は`imageUrl`、ノイズ音声は`assets/js/main.js`の`RECORD_NOISE_SOURCE`から取得します。音声は`fetch`と`decodeAudioData`でバックグラウンドロードし、正転・逆転用バッファを生成します。ノイズがOFFの場合はノイズ音声をロードしません。
+Web Audio APIを使用します。レコード音声は`assets/data/records.json`の`audioUrl`、`label`と`PagePlayer`の背景画像は`imageUrl`、ノイズ音声は`src/composition-root.js`の`RECORD_NOISE_SOURCE`から取得します。音声は`fetch`と`decodeAudioData`でバックグラウンドロードし、正転・逆転用バッファを生成します。ノイズがOFFの場合はノイズ音声をロードしません。
 
 初回表示時はスプラッシュを表示します。`TAP TO START`のクリックでAudioContextをアンロックし、操作ロックを解除します。再生秒数、選択レコード、ノイズ同期状態、ビジュアライザー描画状態はcookieへ保存します。
 
@@ -73,7 +78,7 @@ Web Audio APIを使用します。レコード音声は`assets/data/records.json
 
 ```sh
 node --test tests/javascript-ddd-regression.test.mjs
-for file in $(rg --files assets/js -g '*.js'); do node --check "$file" || exit 1; done
+for file in $(rg --files src -g '*.js'); do node --check "$file" || exit 1; done
 git diff --check
 ```
 

@@ -4,25 +4,25 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { PlaybackService } from '../assets/js/application/playback-service.js';
-import { RecordSelectionService } from '../assets/js/application/record-selection-service.js';
-import { PlaybackPolicy } from '../assets/js/domain/playback-policy.js';
-import { RecordSelectionPolicy } from '../assets/js/domain/record-selection-policy.js';
-import { RecordSelection } from '../assets/js/domain/record-selection.js';
-import { PlaybackDirection } from '../assets/js/domain/playback-direction.js';
-import { PlaybackSession } from '../assets/js/domain/playback-session.js';
-import { PlaybackSeconds } from '../assets/js/domain/playback-seconds.js';
-import { PlaybackTimeline } from '../assets/js/domain/playback-timeline.js';
-import { RotationSpeedPercent } from '../assets/js/domain/rotation-speed-percent.js';
-import { Record } from '../assets/js/domain/record.js';
-import { RecordCatalog } from '../assets/js/domain/record-catalog.js';
-import { BrowserInteractionController } from '../assets/js/controller/browser-interaction-controller.js';
-import { RecordPickerController } from '../assets/js/controller/record-picker-controller.js';
-import { TextRevealController } from '../assets/js/controller/text-reveal-controller.js';
-import { SplashController } from '../assets/js/controller/splash-controller.js';
-import { PlaybackStateRepository } from '../assets/js/infrastructure/playback-state-repository.js';
-import { RecordJsonRepository } from '../assets/js/infrastructure/record-json-repository.js';
-import { WebAudioEngine } from '../assets/js/infrastructure/web-audio-engine.js';
+import { PlaybackService } from '../src/application/playback-service.js';
+import { RecordSelectionService } from '../src/application/record-selection-service.js';
+import { PlaybackPolicy } from '../src/domain/playback-policy.js';
+import { RecordSelectionPolicy } from '../src/domain/record-selection-policy.js';
+import { RecordSelection } from '../src/domain/record-selection.js';
+import { PlaybackDirection } from '../src/domain/playback-direction.js';
+import { PlaybackSession } from '../src/domain/playback-session.js';
+import { PlaybackSeconds } from '../src/domain/playback-seconds.js';
+import { PlaybackTimeline } from '../src/domain/playback-timeline.js';
+import { RotationSpeedPercent } from '../src/domain/rotation-speed-percent.js';
+import { Record } from '../src/domain/record.js';
+import { RecordCatalog } from '../src/domain/record-catalog.js';
+import { BrowserInteractionController } from '../src/controller/browser-interaction-controller.js';
+import { RecordPickerController } from '../src/controller/record-picker-controller.js';
+import { TextRevealController } from '../src/controller/text-reveal-controller.js';
+import { SplashController } from '../src/controller/splash-controller.js';
+import { PlaybackStateRepository } from '../src/infrastructure/playback-state-repository.js';
+import { RecordJsonRepository } from '../src/infrastructure/record-json-repository.js';
+import { WebAudioEngine } from '../src/infrastructure/web-audio-engine.js';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -882,15 +882,15 @@ test('dependencies point inward and browser controllers do not import domain or 
         }
     };
 
-    assertNoForbiddenImports(collectFiles('assets/js/domain'), /from\s+['"][^'"]*\/(?:application|infrastructure|controller)\//, 'outer layers');
-    assertNoForbiddenImports(collectFiles('assets/js/application'), /from\s+['"][^'"]*\/(?:infrastructure|controller)\//, 'outer layers');
-    assertNoForbiddenImports(collectFiles('assets/js/controller'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
-    const compositionRoot = readFileSync(join(projectRoot, 'assets/js/main.js'), 'utf8');
+    assertNoForbiddenImports(collectFiles('src/domain'), /from\s+['"][^'"]*\/(?:application|infrastructure|controller)\//, 'outer layers');
+    assertNoForbiddenImports(collectFiles('src/application'), /from\s+['"][^'"]*\/(?:infrastructure|controller)\//, 'outer layers');
+    assertNoForbiddenImports(collectFiles('src/controller'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
+    const compositionRoot = readFileSync(join(projectRoot, 'src/composition-root.js'), 'utf8');
     assert.match(compositionRoot, /new BrowserInteractionController\(\{/);
     assert.match(compositionRoot, /playbackService,/);
     assert.match(compositionRoot, /playerPanel: document\.querySelector\('#playerPanel'\)/);
     assert.doesNotMatch(compositionRoot, /document\.addEventListener\(|window\.addEventListener\(/);
-    const splashController = readFileSync(join(projectRoot, 'assets/js/controller/splash-controller.js'), 'utf8');
+    const splashController = readFileSync(join(projectRoot, 'src/controller/splash-controller.js'), 'utf8');
     assert.match(splashController, /playbackService\.activateAudio\(\)/);
     assert.doesNotMatch(splashController, /audioEngine|infrastructure/);
 });

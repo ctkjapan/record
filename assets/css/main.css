@@ -6,6 +6,7 @@
 }
 
 html {
+  overflow: hidden;
   overscroll-behavior-y: none;
   overscroll-behavior-x: none;
 }
@@ -26,13 +27,13 @@ html {
 
 body {
   margin: 0;
-  min-width: 320px;
+  font-family: "Space Grotesk", sans-serif;
+  color: rgb(var(--rgb-ink));
+  background: var(--accent-color);
+  overflow: hidden;
   overscroll-behavior-y: none;
   overscroll-behavior-x: none;
   touch-action: pan-x;
-  color: rgb(var(--rgb-ink));
-  background: var(--accent-color);
-  font-family: "Space Grotesk", sans-serif;
   transition: background .4s;
 }
 
@@ -255,11 +256,13 @@ body {
       .noise-button:after,
       .visualizer-button:after {
         content: "OFF";
+        margin-left: .5rem;
       }
 
       .noise-button.is-active:after,
       .visualizer-button.is-active:after {
         content: "ON";
+        margin-right: .5rem;
       }
 
       #playbackReverse.is-active {

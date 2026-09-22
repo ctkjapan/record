@@ -8,37 +8,17 @@
 
 ```text
 index.html
+src/
+├── App.jsx
+├── main.jsx
+├── composition-root.js
+├── controller/
+├── domain/
+├── application/
+└── infrastructure/
 assets/
 ├── css/main.css
 ├── data/records.json
-├── js/
-│   ├── main.js
-│   ├── controller/
-│   │   ├── browser-interaction-controller.js
-│   │   ├── menu-controller.js
-│   │   ├── splash-controller.js
-│   │   ├── record-player-controller.js
-│   │   ├── record-picker-controller.js
-│   │   └── text-reveal-controller.js
-│   ├── domain/
-│   │   ├── record.js
-│   │   ├── record-catalog.js
-│   │   ├── record-selection.js
-│   │   ├── record-selection-policy.js
-│   │   ├── playback-rate.js
-│   │   ├── playback-direction.js
-│   │   ├── playback-policy.js
-│   │   ├── playback-session.js
-│   │   ├── playback-seconds.js
-│   │   └── playback-timeline.js
-│   ├── application/
-│   │   ├── record-catalog-service.js
-│   │   ├── record-selection-service.js
-│   │   └── playback-service.js
-│   └── infrastructure/
-│       ├── record-json-repository.js
-│       ├── playback-state-repository.js
-│       └── web-audio-engine.js
 ├── mp3/
 └── ogg/record_noise_loop.ogg
 docs/
@@ -48,41 +28,43 @@ docs/
 
 | 層 | 主なファイル | 責務 |
 | --- | --- | --- |
-| Domain | `assets/js/domain/record.js`、`record-catalog.js` | レコードと一覧のルール |
-| Domain | `assets/js/domain/record-selection.js`、`record-selection-policy.js` | フォーカス・確定選択状態とインデックス範囲、端循環ルール |
-| Domain | `assets/js/domain/playback-rate.js`、`playback-direction.js` | 再生速度・方向の値と切替ルール |
-| Domain | `assets/js/domain/playback-policy.js` | 回転角差・慣性しきい値の判定、角速度の時間正規化、再生速度との変換 |
-| Domain | `assets/js/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
-| Domain | `assets/js/domain/playback-timeline.js` | 再生位置の補正、ループ位置計算、副音源の方向・位相同期 |
-| Application | `assets/js/application/record-catalog-service.js` | レコード一覧のユースケース |
-| Application | `assets/js/application/record-selection-service.js` | 選択状態を初期化・更新しDomainルールを画面操作へ提供 |
-| Application | `assets/js/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
-| Infrastructure | `assets/js/infrastructure/record-json-repository.js` | JSON取得 |
-| Infrastructure | `assets/js/infrastructure/playback-state-repository.js` | cookie保存・復元 |
-| Infrastructure | `assets/js/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
-| Presentation | `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
-| Presentation | `assets/js/controller/browser-interaction-controller.js` | ページ復元、自動再生復帰、タッチジェスチャー、長押し制御 |
-| Presentation | `assets/js/controller/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
-| Presentation | `assets/js/controller/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
-| Presentation | `assets/js/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
-| Presentation | `assets/js/controller/menu-controller.js` | ヘッダーメニュー、メニューのスワイプ操作 |
-| Composition Root | `assets/js/main.js` | 依存関係の生成と接続 |
+| Domain | `src/domain/record.js`、`record-catalog.js` | レコードと一覧のルール |
+| Domain | `src/domain/record-selection.js`、`record-selection-policy.js` | フォーカス・確定選択状態とインデックス範囲、端循環ルール |
+| Domain | `src/domain/playback-rate.js`、`playback-direction.js` | 再生速度・方向の値と切替ルール |
+| Domain | `src/domain/playback-policy.js` | 回転角差・慣性しきい値の判定、角速度の時間正規化、再生速度との変換 |
+| Domain | `src/domain/playback-session.js` | レコードID、再生秒数、ノイズ・ビジュアライザー設定の状態 |
+| Domain | `src/domain/playback-timeline.js` | 再生位置の補正、ループ位置計算、副音源の方向・位相同期 |
+| Application | `src/application/record-catalog-service.js` | レコード一覧のユースケース |
+| Application | `src/application/record-selection-service.js` | 選択状態を初期化・更新しDomainルールを画面操作へ提供 |
+| Application | `src/application/playback-service.js` | 状態復元、レコード選択、再生操作、保存の調停 |
+| Infrastructure | `src/infrastructure/record-json-repository.js` | JSON取得 |
+| Infrastructure | `src/infrastructure/playback-state-repository.js` | cookie保存・復元 |
+| Infrastructure | `src/infrastructure/web-audio-engine.js` | Web Audio API、音声バッファ、正転・逆転再生、ノイズ同期、解析データ |
+| Presentation | `src/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| Presentation | `src/controller/browser-interaction-controller.js` | ページ復元、自動再生復帰、タッチジェスチャー、長押し制御 |
+| Presentation | `src/controller/record-player-controller.js` | 回転操作、表示、シーク、ラベル背景画像 |
+| Presentation | `src/controller/record-picker-controller.js` | 選択画面、カード操作、レコード情報表示 |
+| Presentation | `src/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
+| Presentation | `src/controller/menu-controller.js` | ヘッダーメニュー、メニューのスワイプ操作 |
+| UI | `src/App.jsx`、`src/main.jsx` | React画面とアプリ起動 |
+| Composition Root | `src/composition-root.js` | DDD依存関係の生成と接続 |
 
 ## 依存方向
 
-画面Controllerはドメインルール、cookie実装、Web Audio実装に直接依存せず、`PlaybackService`と`RecordCatalogService`を`main.js`から注入します。`PlaybackService`は音声エンジンと状態保存リポジトリを調停し、Controllerへ音声状態の読み取りと操作を提供します。`BrowserInteractionController`がページ復元、自動再生復帰の確認、ブラウザー操作の抑止を担当し、`SplashController`の音声有効化も`PlaybackService`経由にします。Composition Rootの`main.js`は各Controllerとサービスの生成・配線を担います。`window.RecordPlayer`は既存の選択処理との互換Facadeとして`main.js`で公開します。
+画面Controllerはドメインルール、cookie実装、Web Audio実装に直接依存せず、`PlaybackService`と`RecordCatalogService`を`composition-root.js`から注入します。`PlaybackService`は音声エンジンと状態保存リポジトリを調停し、Controllerへ音声状態の読み取りと操作を提供します。`BrowserInteractionController`がページ復元、自動再生復帰の確認、ブラウザー操作の抑止を担当し、`SplashController`の音声有効化も`PlaybackService`経由にします。Composition Rootの`src/composition-root.js`は各Controllerとサービスの生成・配線を担います。`window.RecordPlayer`は既存の選択処理との互換Facadeとして公開します。
 
 ## データの流れ
 
-1. `main.js`がcookieリポジトリ、Web Audio、アプリケーションサービス、各Controllerを生成する。
-2. `SplashController`がスプラッシュを表示し、初回クリックで`PlaybackService`へ音声有効化を依頼する。
-3. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
-4. `RecordCatalogService`が`RecordCatalog`を生成する。
-5. `RecordPickerController`が`PlaybackService`へレコード選択ユースケースを依頼し、サービスが必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
+1. Viteが`src/main.jsx`を読み込み、Reactが`src/App.jsx`の画面を描画する。
+2. Reactの初回描画後、`src/composition-root.js`がcookieリポジトリ、Web Audio、アプリケーションサービス、各Controllerを生成する。
+3. `SplashController`がスプラッシュを表示し、初回クリックで`PlaybackService`へ音声有効化を依頼する。
+4. `RecordJsonRepository`が`assets/data/records.json`を読み込む。
+5. `RecordCatalogService`が`RecordCatalog`を生成する。
+6. `RecordPickerController`が`PlaybackService`へレコード選択ユースケースを依頼し、サービスが必要に応じて再生を停止・再生秒数を保存してから選択レコードの音源を読み込む。
    フォーカス位置と確定選択位置は`RecordSelection`が保持し、端循環先とインデックス範囲は`RecordSelectionPolicy`が決定する。
-6. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
-7. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
-8. `PlaybackService`が`PlaybackSession`を更新し、`PlaybackStateRepository`へレコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態の保存を依頼する。
+7. `RecordPickerController`がレコードの`imageUrl`を`RecordPlayerController`へ渡し、`#label`と`PagePlayer`の背景画像を更新する。
+8. `WebAudioEngine`がレコード音声を取得・デコードし、ノイズON時は`assets/ogg/record_noise_loop.ogg`も同期再生する。
+9. `PlaybackService`が`PlaybackSession`を更新し、`PlaybackStateRepository`へレコードID、再生秒数、ノイズ同期状態、ビジュアライザー描画状態の保存を依頼する。
 
 ## DDDルール
 
@@ -96,6 +78,7 @@ docs/
 - 先頭から右方向、末尾から左方向への循環先は`RecordSelectionPolicy`に集約し、タッチ・マウスのジェスチャー閾値判定はControllerに残す。
 - 選択・フォーカス位置の状態遷移と有効範囲補正は`RecordSelection`へ集約し、Controllerは状態を画面表示へ反映する。
 - JSON、cookie、Web Audio APIへのアクセスは`infrastructure/`に限定する。
+- React画面はCSSと既存画面Controllerが参照するDOM ID・ARIA属性を維持する。DOM操作の多いControllerは段階移行用にReact描画後のブリッジとして初期化する。
 
 ## cookie
 

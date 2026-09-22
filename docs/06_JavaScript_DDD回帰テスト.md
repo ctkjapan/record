@@ -10,7 +10,7 @@ DDDへの段階的な整理で、レコード再選択、再生位置の保存�
 
 ```sh
 node --test tests/javascript-ddd-regression.test.mjs
-for file in $(rg --files assets/js -g '*.js'); do node --check "$file" || exit 1; done
+for file in $(rg --files src -g '*.js'); do node --check "$file" || exit 1; done
 git diff --check
 ```
 

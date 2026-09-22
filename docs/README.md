@@ -10,22 +10,26 @@
 - [レスポンシブ・アクセシビリティ](04_レスポンシブとアクセシビリティ.md)
 - [JavaScript DDD構成](05_JavaScript_DDD構成.md)
 - [JavaScript DDD回帰テスト](06_JavaScript_DDD回帰テスト.md)
+- [Vite + React移行](07_Vite_React移行.md)
 
 ## 対象ファイル
 
 | ファイル | 役割 |
 | --- | --- |
 | `index.html` | ページ構造、表示テキスト、操作対象、ARIA属性 |
-| `assets/js/main.js` | 依存関係の生成と初期化 |
-| `assets/js/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
-| `assets/js/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
-| `assets/js/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
-| `assets/js/controller/record-player-controller.js` | レコード回転、慣性、シーク、表示、ラベル背景画像 |
-| `assets/js/controller/record-picker-controller.js` | レコード選択画面とレコード情報の更新 |
-| `assets/js/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
-| `assets/js/domain/` | レコード、再生速度、再生方向、再生セッションのドメインルール |
-| `assets/js/application/` | レコード一覧と再生状態のユースケース |
-| `assets/js/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
+| `src/App.jsx` | Reactで描画するページ、プレーヤー、選択画面 |
+| `src/main.jsx` | React rootとアプリケーション起動 |
+| `src/composition-root.js` | DDD依存関係の生成と初期化 |
+| `vite.config.js` | Reactプラグインと静的アセット出力 |
+| `src/controller/browser-interaction-controller.js` | ページ復元、タッチジェスチャー、長押し制御 |
+| `src/controller/splash-controller.js` | 初回音声許可、スプラッシュ表示、操作ロック |
+| `src/controller/menu-controller.js` | ヘッダーメニューの開閉とキーボード操作 |
+| `src/controller/record-player-controller.js` | レコード回転、慣性、シーク、表示、ラベル背景画像 |
+| `src/controller/record-picker-controller.js` | レコード選択画面とレコード情報の更新 |
+| `src/controller/text-reveal-controller.js` | 文字単位の表示アニメーション |
+| `src/domain/` | レコード、再生速度、再生方向、再生セッションのドメインルール |
+| `src/application/` | レコード一覧と再生状態のユースケース |
+| `src/infrastructure/` | JSON、cookie、Web Audio APIのアダプター |
 | `assets/css/main.css` | レイアウト、配色、レコード表現、レスポンシブ表示 |
 | `assets/data/records.json` | レコード定義、音声URL、ラベル背景画像URL |
 | `assets/mp3/` | レコード本編の音声ファイル |
