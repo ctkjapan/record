@@ -1,15 +1,45 @@
+const HERO_REVEAL_INTERVAL_MS = 10_000;
+
 /** テキストを1文字ずつ下から表示するアニメーションController。 */
 export class TextRevealController {
-    constructor() {
+    constructor({ documentRef = document, windowRef = window } = {}) {
+        this.document = documentRef;
+        this.window = windowRef;
         // 初回表示とレコード情報の更新でアニメーションする要素。
-        this.splashTitle = document.querySelector('#splashTitle');
-        this.hero = document.querySelector('#hero');
+        this.splashScreen = this.document.querySelector('#splashScreen');
+        this.splashTitle = this.document.querySelector('#splashTitle');
+        this.hero = this.document.querySelector('#hero');
+        this.heroRevealInterval = null;
     }
 
     /** 初回表示対象のテキストアニメーションを開始する。 */
     initialize() {
         this.reveal(this.splashTitle);
+        if (!this.splashScreen || this.splashScreen.hidden) this.onPlayerScreenShown();
+        this.document.addEventListener('visibilitychange', () => {
+            if (!this.document.hidden) this.onPlayerScreenShown();
+        });
+    }
+
+    /** プレーヤー画面の表示開始時にheroを再生し、10秒周期を開始し直す。 */
+    onPlayerScreenShown() {
+        if (!this.isPlayerScreenVisible()) return;
         this.reveal(this.hero);
+        if (this.heroRevealInterval !== null) this.window.clearInterval(this.heroRevealInterval);
+        this.heroRevealInterval = this.window.setInterval(() => this.revealHero(), HERO_REVEAL_INTERVAL_MS);
+    }
+
+    /** プレーヤー画面が表示中のときだけheroを再アニメーションする。 */
+    revealHero() {
+        if (!this.isPlayerScreenVisible()) return;
+        this.reveal(this.hero);
+    }
+
+    /** ページ、スプラッシュ、プレーヤーパネルの表示状態を判定する。 */
+    isPlayerScreenVisible() {
+        if (!this.hero || this.document.hidden || (this.splashScreen && !this.splashScreen.hidden)) return false;
+        const playerPanel = this.hero.closest?.('#playerPanel');
+        return !playerPanel?.hidden;
     }
 
     /** 対象要素のテキストを文字単位に分割して表示する。 */
@@ -19,9 +49,9 @@ export class TextRevealController {
         const textNodes = this.collectTextNodes(root);
         let characterIndex = 0;
         textNodes.forEach((textNode) => {
-            const fragment = document.createDocumentFragment();
+            const fragment = this.document.createDocumentFragment();
             Array.from(textNode.nodeValue).forEach((character) => {
-                const characterElement = document.createElement('span');
+                const characterElement = this.document.createElement('span');
                 characterElement.className = 'text-reveal-character';
                 characterElement.style.setProperty('--text-reveal-index', characterIndex);
                 characterElement.textContent = character;
@@ -35,7 +65,7 @@ export class TextRevealController {
     /** 既存の文字要素を通常のテキストへ戻す。 */
     restoreText(root) {
         root.querySelectorAll('.text-reveal-character').forEach((characterElement) => {
-            characterElement.replaceWith(document.createTextNode(characterElement.textContent));
+            characterElement.replaceWith(this.document.createTextNode(characterElement.textContent));
         });
     }
 

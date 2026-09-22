@@ -1,5 +1,6 @@
 import { RecordCatalogService } from './application/record-catalog-service.js';
 import { PlaybackService } from './application/playback-service.js';
+import { RecordSelectionService } from './application/record-selection-service.js';
 import { PlaybackStateRepository } from './infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from './infrastructure/record-json-repository.js';
 import { WebAudioEngine } from './infrastructure/web-audio-engine.js';
@@ -9,10 +10,6 @@ import { SplashController } from './controller/splash-controller.js';
 import { MenuController } from './controller/menu-controller.js';
 import { TextRevealController } from './controller/text-reveal-controller.js';
 import { BrowserInteractionController } from './controller/browser-interaction-controller.js';
-
-// ブラウザー固有のページ復元・ジェスチャー制御を初期化する。
-const browserInteractionController = new BrowserInteractionController();
-browserInteractionController.initialize();
 
 // ヘッダーメニューの開閉Controllerを初期化する。
 const menuController = new MenuController();
@@ -30,11 +27,20 @@ const RECORD_NOISE_SOURCE = 'assets/ogg/record_noise_loop.ogg';
 const playbackStateRepository = new PlaybackStateRepository();
 const audioEngine = new WebAudioEngine({ noiseSourceUrl: RECORD_NOISE_SOURCE, noiseEnabled: false, fetchImpl: globalThis.fetch });
 const playbackService = new PlaybackService({ audioEngine, playbackStateRepository });
+// ブラウザー固有のページ復元・ジェスチャー・自動再生復帰を制御する。
+const browserInteractionController = new BrowserInteractionController({
+    playbackService,
+    playerPanel: document.querySelector('#playerPanel'),
+});
+browserInteractionController.initialize();
 // 音声再生とプレーヤー画面を接続するController。
 const playerController = new RecordPlayerController({ playbackService });
 playerController.initialize();
 // 初回ユーザー操作で音声を有効化するスプラッシュController。
-const splashController = new SplashController({ playbackService });
+const splashController = new SplashController({
+    playbackService,
+    onPlayerScreenShown: () => textRevealController.onPlayerScreenShown(),
+});
 splashController.initialize();
 window.RecordPlayer = Object.freeze({
     // 既存の外部呼び出し向けに、音源切り替えAPIだけを公開する。
@@ -47,9 +53,11 @@ window.RecordPlayer = Object.freeze({
 
 // JSONからレコード一覧を取得するアプリケーションサービス。
 const recordCatalogService = new RecordCatalogService(new RecordJsonRepository(new URL(RECORDS_LIST, import.meta.url)));
+const recordSelectionService = new RecordSelectionService();
 // 選択画面とプレーヤーControllerを依存性注入で接続する。
 const pickerController = new RecordPickerController({
     recordCatalogService,
+    recordSelectionService,
     playerController,
     playbackService,
     openMenu: () => menuController.open(),

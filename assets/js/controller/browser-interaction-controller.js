@@ -3,15 +3,18 @@ const EDGE_SWIPE_GUARD_PX = 32;
 
 /** ブラウザー固有のページ復元とジェスチャー抑止を担当するPresentation Controller。 */
 export class BrowserInteractionController {
-    constructor({ windowRef = window, documentRef = document, ElementClass = Element } = {}) {
+    constructor({ windowRef = window, documentRef = document, ElementClass = Element, playbackService = null, playerPanel = null } = {}) {
         this.window = windowRef;
         this.document = documentRef;
         this.ElementClass = ElementClass;
+        this.playbackService = playbackService;
+        this.playerPanel = playerPanel;
     }
 
     /** ページ復元、タッチジェスチャー、長押しのブラウザー操作を制御する。 */
     initialize() {
         this.reloadRestoredPage();
+        this.reloadWhenAutoplayIsUnavailable();
         this.preventMobileBrowserGestures();
         this.preventLongPress();
     }
@@ -20,6 +23,22 @@ export class BrowserInteractionController {
     reloadRestoredPage() {
         this.window.addEventListener('pageshow', (event) => {
             if (event.persisted || this.document.wasDiscarded === true) this.window.location.reload();
+        });
+    }
+
+    /** プレーヤー表示中にバックグラウンドから戻り、自動再生不可ならリロードする。 */
+    reloadWhenAutoplayIsUnavailable() {
+        if (!this.playbackService || !this.playerPanel) return;
+        let wasHidden = this.document.hidden === true;
+        this.document.addEventListener('visibilitychange', async () => {
+            if (this.document.hidden) {
+                wasHidden = true;
+                return;
+            }
+            if (!wasHidden) return;
+            wasHidden = false;
+            if (this.playerPanel.hidden) return;
+            if (!(await this.playbackService.isAutoplayAllowed())) this.window.location.reload();
         });
     }
 

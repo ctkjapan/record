@@ -1,16 +1,18 @@
 const PLAYER_STAGE_SWIPE_THRESHOLD = 48;
 const PICKER_WRAP_SWIPE_THRESHOLD = 48;
+const PICKER_WRAP_INTENT_THRESHOLD = 8;
 
 /** レコード一覧の取得、選択状態、カード操作を担当する画面Controller。 */
 export class RecordPickerController {
-    constructor({ recordCatalogService, playerController, playbackService, openMenu = () => {}, textRevealController = null }) {
+    constructor({ recordCatalogService, recordSelectionService, playerController, playbackService, openMenu = () => {}, textRevealController = null }) {
         // JSON一覧・プレーヤー・cookie保存を担当する依存オブジェクト。
         this.recordCatalogService = recordCatalogService;
+        this.recordSelectionService = recordSelectionService;
         this.playerController = playerController;
         this.playbackService = playbackService;
         // プレーヤーステージの下スワイプからヘッダーメニューを開く処理。
         this.openMenu = openMenu;
-        // レコード情報更新時のテキストアニメーション処理。
+        // プレーヤー画面へ戻ったときのテキストアニメーション処理。
         this.textRevealController = textRevealController;
         // レコード選択画面のDOM要素。
         this.changeButton = document.querySelector('#changeButton');
@@ -21,7 +23,6 @@ export class RecordPickerController {
         this.albumMaxNumber = document.querySelector('#albumMaxNumber');
         this.pickerPositionMax = document.querySelector('#pickerPositionMax');
         this.playerPanel = document.querySelector('#playerPanel');
-        this.hero = document.querySelector('#hero');
         this.albumNumber = document.querySelector('#albumNumber');
         this.albumArtist = document.querySelector('#albumArtist');
         this.albumTitle = document.querySelector('#albumTitle');
@@ -31,21 +32,18 @@ export class RecordPickerController {
         // レコード一覧と現在のフォーカス／選択状態。
         this.catalog = null;
         this.records = [];
-        this.focusedRecordIndex = 0;
-        this.selectedRecordIndex = 0;
         // マウスドラッグによるカードスクロールの一時状態。
         this.pickerPointerId = null;
         this.pickerDragStartX = 0;
         this.pickerDragStartScrollLeft = 0;
         this.pickerDidDrag = false;
         this.pickerPointerStartIndex = null;
-        this.pickerPointerStartedAtFirst = false;
-        this.pickerPointerStartedAtLast = false;
+        this.pickerPointerStartFocusedIndex = null;
         this.pickerSelectedOnPointerUp = false;
         this.pickerTouchIdentifier = null;
         this.pickerTouchStartX = 0;
-        this.pickerTouchStartedAtFirst = false;
-        this.pickerTouchStartedAtLast = false;
+        this.pickerTouchStartY = 0;
+        this.pickerTouchStartFocusedIndex = null;
         this.pickerSuppressClickIndex = null;
         // プレーヤーステージの左右スワイプ判定用状態。
         this.playerStagePointerId = null;
@@ -67,10 +65,9 @@ export class RecordPickerController {
         try {
             this.catalog = await this.recordCatalogService.load();
             this.records = this.catalog.all();
-            this.selectedRecordIndex = this.getStoredRecordIndex();
-            this.focusedRecordIndex = this.selectedRecordIndex;
+            const { selectedIndex } = this.recordSelectionService.initialize(this.records.length, this.getStoredRecordIndex());
             this.renderPicker();
-            this.selectRecord(this.selectedRecordIndex);
+            this.selectRecord(selectedIndex);
             this.changeButton.disabled = false;
         } catch {
             this.pickerStatus.textContent = 'レコード一覧を読み込めませんでした';
@@ -102,6 +99,7 @@ export class RecordPickerController {
         this.pickerTrack.addEventListener('pointercancel', (event) => this.releasePickerPointer(event));
         this.pickerTrack.addEventListener('lostpointercapture', (event) => this.releasePickerPointer(event));
         this.pickerTrack.addEventListener('touchstart', (event) => this.handlePickerTouchStart(event), { passive: true });
+        this.pickerTrack.addEventListener('touchmove', (event) => this.handlePickerTouchMove(event), { passive: false });
         this.pickerTrack.addEventListener('touchend', (event) => this.handlePickerTouchEnd(event), { passive: true });
         this.pickerTrack.addEventListener('touchcancel', () => this.resetPickerTouch(), { passive: true });
         this.pickerTrack.addEventListener('click', (event) => this.handleClick(event));
@@ -132,12 +130,8 @@ export class RecordPickerController {
         const deltaX = event.clientX - this.playerStageSwipeStartX;
         const deltaY = event.clientY - this.playerStageSwipeStartY;
         const isSwipeCompleted = event.type === 'pointerup' || event.type === 'pointercancel';
-        const shouldOpenPicker = isSwipeCompleted
-            && Math.abs(deltaX) >= PLAYER_STAGE_SWIPE_THRESHOLD
-            && Math.abs(deltaX) > Math.abs(deltaY);
-        const shouldOpenMenu = isSwipeCompleted
-            && deltaY >= PLAYER_STAGE_SWIPE_THRESHOLD
-            && deltaY > Math.abs(deltaX);
+        const shouldOpenPicker = isSwipeCompleted && Math.abs(deltaX) >= PLAYER_STAGE_SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY);
+        const shouldOpenMenu = isSwipeCompleted && deltaY >= PLAYER_STAGE_SWIPE_THRESHOLD && deltaY > Math.abs(deltaX);
         this.playerStagePointerId = null;
         if (this.playerStage.hasPointerCapture?.(event.pointerId)) this.playerStage.releasePointerCapture(event.pointerId);
         if (shouldOpenPicker || shouldOpenMenu) {
@@ -209,6 +203,14 @@ export class RecordPickerController {
         this.pickerPositionMax.textContent = recordCount;
     }
 
+    get focusedRecordIndex() {
+        return this.recordSelectionService.getState().focusedIndex;
+    }
+
+    get selectedRecordIndex() {
+        return this.recordSelectionService.getState().selectedIndex;
+    }
+
     /** レコード一覧から選択カードのHTMLを生成する。 */
     renderPicker() {
         this.updateRecordCount();
@@ -217,7 +219,7 @@ export class RecordPickerController {
                 (record, index) => `
     <button class="picker-card${index === this.selectedRecordIndex ? ' is-selected' : ''}${index === this.focusedRecordIndex ? ' is-focused' : ''}" type="button" data-record-index="${index}" data-display-index="${String(index + 1).padStart(2, '0')} / ${String(this.records.length).padStart(2, '0')}" aria-label="${record.title}を選択">
       <span class="picker-disc" style="--disc-color: ${record.color}"></span>
-      <p>${record.id}<strong>${record.title}</strong></p>
+      <p>${record.id}<span class="picker-track-artist">${record.artist}</span><span class="picker-track-title">${record.trackTitle}</span></p>
     </button>
   `,
             )
@@ -227,24 +229,23 @@ export class RecordPickerController {
 
     /** 中央に表示するカードを更新し、位置と案内文を変更する。 */
     setFocusedRecord(index) {
-        this.focusedRecordIndex = Math.max(0, Math.min(this.records.length - 1, index));
-        this.pickerCards.forEach((card, cardIndex) => card.classList.toggle('is-focused', cardIndex === this.focusedRecordIndex));
-        this.pickerPosition.textContent = String(this.focusedRecordIndex + 1).padStart(2, '0');
-        this.pickerStatus.textContent = this.focusedRecordIndex === this.selectedRecordIndex ? '中央のレコードをクリックして選択' : `${this.records[this.focusedRecordIndex].title} をクリックして変更`;
+        const { focusedIndex, selectedIndex } = this.recordSelectionService.focus(index);
+        this.pickerCards.forEach((card, cardIndex) => card.classList.toggle('is-focused', cardIndex === focusedIndex));
+        this.pickerPosition.textContent = String(focusedIndex + 1).padStart(2, '0');
+        this.pickerStatus.textContent = focusedIndex === selectedIndex ? '中央のレコードをクリックして選択' : `${this.records[focusedIndex].title} をクリックして変更`;
     }
 
     /** レコード選択ユースケースを実行し、選択画面の表示を同期する。 */
     selectRecord(index) {
-        this.selectedRecordIndex = index;
-        const record = this.catalog.at(index);
+        const { selectedIndex } = this.recordSelectionService.select(index);
+        const record = this.catalog.at(selectedIndex);
         const { isRecordChanged } = this.playbackService.selectRecord(record);
         if (isRecordChanged) this.playerController.resetForRecordChange();
         this.playerController.setRecordImage(record.imageUrl);
-        document.documentElement.style.setProperty('--accent', record.color);
-        this.albumNumber.textContent = String(index + 1).padStart(2, '0');
+        document.documentElement.style.setProperty('--accent-color', record.color);
+        this.albumNumber.textContent = String(selectedIndex + 1).padStart(2, '0');
         this.albumArtist.textContent = record.artist;
         this.albumTitle.textContent = record.trackTitle;
-        this.textRevealController?.reveal(this.hero);
         this.pickerCards.forEach((card, cardIndex) => card.classList.toggle('is-selected', cardIndex === this.selectedRecordIndex));
         this.pickerStatus.textContent = `${record.title} を再生中`;
     }
@@ -267,6 +268,7 @@ export class RecordPickerController {
         this.pageBody.classList.remove('picker-open');
         this.changeButton.setAttribute('aria-pressed', 'false');
         this.playerController.restoreVisualizerVisibility?.();
+        this.textRevealController?.onPlayerScreenShown();
     }
 
     /** スクロール位置から中央に最も近いカードを計算する。 */
@@ -296,8 +298,7 @@ export class RecordPickerController {
         this.pickerDragStartScrollLeft = this.pickerTrack.scrollLeft;
         this.pickerDidDrag = false;
         this.pickerPointerStartIndex = Number(event.target.closest('.picker-card')?.dataset.recordIndex ?? NaN);
-        this.pickerPointerStartedAtFirst = this.focusedRecordIndex === 0;
-        this.pickerPointerStartedAtLast = this.focusedRecordIndex === this.records.length - 1;
+        this.pickerPointerStartFocusedIndex = this.focusedRecordIndex;
         this.pickerTrack.setPointerCapture(this.pickerPointerId);
         this.pickerTrack.classList.add('is-dragging');
     }
@@ -314,24 +315,17 @@ export class RecordPickerController {
     releasePickerPointer(event) {
         if (event.pointerId !== this.pickerPointerId) return;
         const dragDistance = event.clientX - this.pickerDragStartX;
-        const shouldWrapToLast = event.type === 'pointerup'
-            && this.pickerDidDrag
-            && this.pickerPointerStartedAtFirst
-            && dragDistance >= PICKER_WRAP_SWIPE_THRESHOLD;
-        const shouldWrapToFirst = event.type === 'pointerup'
-            && this.pickerDidDrag
-            && this.pickerPointerStartedAtLast
-            && dragDistance <= -PICKER_WRAP_SWIPE_THRESHOLD;
+        const wrapDirection = dragDistance >= PICKER_WRAP_SWIPE_THRESHOLD ? 'right' : dragDistance <= -PICKER_WRAP_SWIPE_THRESHOLD ? 'left' : null;
+        const wrapTargetIndex = event.type === 'pointerup' && this.pickerDidDrag && wrapDirection ? this.recordSelectionService.wrapTargetIndex(this.pickerPointerStartFocusedIndex, this.records.length, wrapDirection) : null;
         const shouldSelect = event.type === 'pointerup' && !this.pickerDidDrag && Number.isInteger(this.pickerPointerStartIndex);
         const selectedIndex = this.pickerPointerStartIndex;
+        const startFocusedIndex = this.pickerPointerStartFocusedIndex;
         this.pickerPointerId = null;
         this.pickerPointerStartIndex = null;
-        this.pickerPointerStartedAtFirst = false;
-        this.pickerPointerStartedAtLast = false;
+        this.pickerPointerStartFocusedIndex = null;
         this.pickerTrack.classList.remove('is-dragging');
         this.pickerDidDrag = false;
-        if (shouldWrapToLast) this.wrapPickerToRecord(this.records.length - 1, 0);
-        else if (shouldWrapToFirst) this.wrapPickerToRecord(0, this.records.length - 1);
+        if (wrapTargetIndex !== null) this.wrapPickerToRecord(wrapTargetIndex, startFocusedIndex);
         if (shouldSelect && selectedIndex === this.focusedRecordIndex) {
             this.selectRecord(selectedIndex);
             this.closePicker();
@@ -349,8 +343,22 @@ export class RecordPickerController {
         const touch = event.touches[0];
         this.pickerTouchIdentifier = touch.identifier;
         this.pickerTouchStartX = touch.clientX;
-        this.pickerTouchStartedAtFirst = this.focusedRecordIndex === 0;
-        this.pickerTouchStartedAtLast = this.focusedRecordIndex === this.records.length - 1;
+        this.pickerTouchStartY = touch.clientY;
+        this.pickerTouchStartFocusedIndex = this.focusedRecordIndex;
+    }
+
+    /** 端から外向きの操作を通常の横スクロールより先に捕捉する。 */
+    handlePickerTouchMove(event) {
+        if (this.pickerTouchIdentifier === null) return;
+        const touch = Array.from(event.touches).find(({ identifier }) => identifier === this.pickerTouchIdentifier);
+        if (!touch) return;
+        const deltaX = touch.clientX - this.pickerTouchStartX;
+        const deltaY = touch.clientY - this.pickerTouchStartY;
+        if (Math.abs(deltaX) < PICKER_WRAP_INTENT_THRESHOLD || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+
+        const direction = deltaX > 0 ? 'right' : 'left';
+        const wrapTargetIndex = this.recordSelectionService.wrapTargetIndex(this.pickerTouchStartFocusedIndex, this.records.length, direction);
+        if (wrapTargetIndex !== null && event.cancelable) event.preventDefault();
     }
 
     /** 先頭端から右へスワイプした場合、末尾カードへフォーカスを循環する。 */
@@ -359,22 +367,19 @@ export class RecordPickerController {
         const touch = Array.from(event.changedTouches).find(({ identifier }) => identifier === this.pickerTouchIdentifier);
         if (!touch) return;
         const swipeDistance = touch.clientX - this.pickerTouchStartX;
-        const shouldWrapToLast = event.type === 'touchend'
-            && this.pickerTouchStartedAtFirst
-            && swipeDistance >= PICKER_WRAP_SWIPE_THRESHOLD;
-        const shouldWrapToFirst = event.type === 'touchend'
-            && this.pickerTouchStartedAtLast
-            && swipeDistance <= -PICKER_WRAP_SWIPE_THRESHOLD;
+        const wrapDirection = swipeDistance >= PICKER_WRAP_SWIPE_THRESHOLD ? 'right' : swipeDistance <= -PICKER_WRAP_SWIPE_THRESHOLD ? 'left' : null;
+        const wrapTargetIndex = event.type === 'touchend' && wrapDirection ? this.recordSelectionService.wrapTargetIndex(this.pickerTouchStartFocusedIndex, this.records.length, wrapDirection) : null;
+        const startFocusedIndex = this.pickerTouchStartFocusedIndex;
         this.resetPickerTouch();
-        if (shouldWrapToLast) this.wrapPickerToRecord(this.records.length - 1, 0);
-        else if (shouldWrapToFirst) this.wrapPickerToRecord(0, this.records.length - 1);
+        if (wrapTargetIndex !== null) this.wrapPickerToRecord(wrapTargetIndex, startFocusedIndex);
     }
 
     /** タッチスワイプ判定用の状態を消去する。 */
     resetPickerTouch() {
         this.pickerTouchIdentifier = null;
-        this.pickerTouchStartedAtFirst = false;
-        this.pickerTouchStartedAtLast = false;
+        this.pickerTouchStartX = 0;
+        this.pickerTouchStartY = 0;
+        this.pickerTouchStartFocusedIndex = null;
     }
 
     /** 指定カードを中央へ移動してフォーカスし、スワイプ後の合成クリックを抑止する。 */

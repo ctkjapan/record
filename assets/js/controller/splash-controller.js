@@ -1,9 +1,10 @@
 /** 初回操作で音声を有効化し、アプリ画面の操作ロックを解除するController。 */
 export class SplashController {
-    constructor({ playbackService, documentRef = document }) {
+    constructor({ playbackService, documentRef = document, onPlayerScreenShown = () => {} }) {
         // 音声有効化のユースケースを担当するアプリケーションサービス。
         this.playbackService = playbackService;
         this.document = documentRef;
+        this.onPlayerScreenShown = onPlayerScreenShown;
         // スプラッシュ画面と開始ボタンのDOM要素。
         this.splashScreen = this.document.querySelector('#splashScreen');
         this.startButton = this.document.querySelector('#splashStartButton');
@@ -31,6 +32,7 @@ export class SplashController {
             this.setApplicationLocked(false);
             this.splashScreen.hidden = true;
             this.startButton.disabled = false;
+            this.onPlayerScreenShown();
         } catch {
             this.startButton.disabled = false;
             this.splashStatus.textContent = 'Tap to try again.';

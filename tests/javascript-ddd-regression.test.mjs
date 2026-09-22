@@ -5,14 +5,20 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { PlaybackService } from '../assets/js/application/playback-service.js';
+import { RecordSelectionService } from '../assets/js/application/record-selection-service.js';
 import { PlaybackPolicy } from '../assets/js/domain/playback-policy.js';
+import { RecordSelectionPolicy } from '../assets/js/domain/record-selection-policy.js';
+import { RecordSelection } from '../assets/js/domain/record-selection.js';
 import { PlaybackDirection } from '../assets/js/domain/playback-direction.js';
 import { PlaybackSession } from '../assets/js/domain/playback-session.js';
 import { PlaybackSeconds } from '../assets/js/domain/playback-seconds.js';
+import { PlaybackTimeline } from '../assets/js/domain/playback-timeline.js';
 import { RotationSpeedPercent } from '../assets/js/domain/rotation-speed-percent.js';
 import { Record } from '../assets/js/domain/record.js';
 import { RecordCatalog } from '../assets/js/domain/record-catalog.js';
 import { BrowserInteractionController } from '../assets/js/controller/browser-interaction-controller.js';
+import { RecordPickerController } from '../assets/js/controller/record-picker-controller.js';
+import { TextRevealController } from '../assets/js/controller/text-reveal-controller.js';
 import { SplashController } from '../assets/js/controller/splash-controller.js';
 import { PlaybackStateRepository } from '../assets/js/infrastructure/playback-state-repository.js';
 import { RecordJsonRepository } from '../assets/js/infrastructure/record-json-repository.js';
@@ -80,7 +86,7 @@ function createPlaybackService({
     };
 }
 
-function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDiscarded = false } = {}) {
+function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDiscarded = false, playbackService = null, playerHidden = false } = {}) {
     const windowListeners = new Map();
     const documentListeners = new Map();
     let reloadCount = 0;
@@ -92,10 +98,12 @@ function createBrowserInteractionFixture({ innerWidth = 400, scrollY = 0, wasDis
     };
     const documentRef = {
         wasDiscarded,
+        hidden: false,
         addEventListener: (type, listener, options) => documentListeners.set(type, { listener, options }),
+        querySelector: (selector) => selector === '#playerPanel' ? { hidden: playerHidden } : null,
     };
     class FakeElement {}
-    const controller = new BrowserInteractionController({ windowRef, documentRef, ElementClass: FakeElement });
+    const controller = new BrowserInteractionController({ windowRef, documentRef, ElementClass: FakeElement, playbackService, playerPanel: documentRef.querySelector('#playerPanel') });
     controller.initialize();
     return {
         controller,
@@ -122,7 +130,7 @@ function createCancelableEvent(properties = {}) {
     };
 }
 
-function createSplashFixture({ activateAudio = async () => {} } = {}) {
+function createSplashFixture({ activateAudio = async () => {}, onPlayerScreenShown = () => {} } = {}) {
     class FakeElement {
         constructor() {
             this.disabled = false;
@@ -164,7 +172,7 @@ function createSplashFixture({ activateAudio = async () => {} } = {}) {
         body: new FakeElement(),
         querySelector: (selector) => elements.get(selector),
     };
-    const controller = new SplashController({ playbackService: { activateAudio }, documentRef });
+    const controller = new SplashController({ playbackService: { activateAudio }, documentRef, onPlayerScreenShown });
     return { controller, elements, documentRef };
 }
 
@@ -292,6 +300,15 @@ test('PlaybackSeconds owns the finite non-negative playback position invariant',
     assert.equal(new PlaybackSession({ playbackSeconds: -1 }).playbackSeconds, 0);
 });
 
+test('PlaybackTimeline constrains playback position to the known audio duration', () => {
+    assert.equal(PlaybackTimeline.normalizePosition(12.5, 30), 12.5);
+    assert.equal(PlaybackTimeline.normalizePosition(45, 30), 30);
+    assert.equal(PlaybackTimeline.normalizePosition(-4, 30), 0);
+    assert.equal(PlaybackTimeline.normalizePosition(Number.NaN, 30), 0);
+    assert.equal(PlaybackTimeline.normalizePosition(45, 0), 45);
+    assert.equal(PlaybackTimeline.normalizePosition(45, Number.NaN), 45);
+});
+
 test('noise state persists on success and falls back to off on failure', async () => {
     const success = createPlaybackService();
     assert.equal(await success.service.toggleNoise(), true);
@@ -312,9 +329,26 @@ test('playback service activates browser audio through its application boundary'
     assert.deepEqual(engineCalls, [['unlock']]);
 });
 
+test('playback service exposes autoplay recovery through its audio boundary', async () => {
+    const { service, audioEngine } = createPlaybackService();
+    audioEngine.isAutoplayAllowed = async () => false;
+
+    assert.equal(await service.isAutoplayAllowed(), false);
+});
+
+test('playback service normalizes seek position using the current audio duration', () => {
+    const { service } = createPlaybackService();
+    assert.equal(service.normalizePlaybackPosition(140), 120);
+    assert.equal(service.normalizePlaybackPosition(-1), 0);
+});
+
 test('splash keeps start, unlock, and retry behavior through PlaybackService', async () => {
     let activations = 0;
-    const fixture = createSplashFixture({ activateAudio: async () => activations++ });
+    let shownCount = 0;
+    const fixture = createSplashFixture({
+        activateAudio: async () => activations++,
+        onPlayerScreenShown: () => shownCount++,
+    });
     fixture.controller.initialize();
     const splashScreen = fixture.elements.get('#splashScreen');
     const startButton = fixture.elements.get('#splashStartButton');
@@ -324,6 +358,7 @@ test('splash keeps start, unlock, and retry behavior through PlaybackService', a
     assert.equal(fixture.elements.get('main').attributes.has('inert'), true);
     await fixture.controller.startApplication();
     assert.equal(activations, 1);
+    assert.equal(shownCount, 1);
     assert.equal(splashScreen.hidden, true);
     assert.equal(startButton.disabled, false);
     assert.equal(fixture.elements.get('header').attributes.has('inert'), false);
@@ -425,6 +460,122 @@ test('RecordCatalog requires unique record IDs and preserves lookup behavior', (
     assert.equal(new RecordCatalog(shippedRecords).all().length, shippedRecords.length);
 });
 
+test('record selection domain rule wraps between both ends independently on consecutive gestures', () => {
+    const service = new RecordSelectionService();
+
+    const lastIndex = service.wrapTargetIndex(0, 3, 'right');
+    const firstIndex = service.wrapTargetIndex(lastIndex, 3, 'left');
+
+    assert.equal(lastIndex, 2);
+    assert.equal(firstIndex, 0);
+    assert.equal(RecordSelectionPolicy.wrapTargetIndex(0, 3, 'left'), null);
+    assert.equal(RecordSelectionPolicy.wrapTargetIndex(1, 3, 'right'), null);
+    assert.equal(RecordSelectionPolicy.wrapTargetIndex(0, 1, 'right'), null);
+    assert.equal(RecordSelectionPolicy.wrapTargetIndex(-1, 3, 'right'), null);
+});
+
+test('RecordSelection keeps focus and selected record separate and normalizes focus within the catalog', () => {
+    const selection = new RecordSelection(3, 2);
+
+    assert.deepEqual(selection.focus(-4), { selectedIndex: 2, focusedIndex: 0 });
+    assert.deepEqual(selection.focus(3.8), { selectedIndex: 2, focusedIndex: 2 });
+    assert.deepEqual(selection.wrap('left'), { selectedIndex: 2, focusedIndex: 0 });
+    assert.deepEqual(selection.select(99), { selectedIndex: 2, focusedIndex: 2 });
+    assert.equal(RecordSelectionPolicy.normalizeIndex(Number.NaN, 3), 0);
+    assert.equal(RecordSelectionPolicy.normalizeIndex(0, 0), null);
+    assert.throws(() => new RecordSelection(0), /1件以上/);
+});
+
+test('record picker accepts the opposite edge swipe immediately after wrapping', () => {
+    const controller = Object.create(RecordPickerController.prototype);
+    const wrappedIndices = [];
+    controller.records = [{}, {}, {}];
+    controller.recordSelectionService = new RecordSelectionService();
+    controller.recordSelectionService.initialize(3, 0);
+    controller.wrapPickerToRecord = (index) => {
+        wrappedIndices.push(index);
+        controller.recordSelectionService.focus(index);
+    };
+
+    controller.handlePickerTouchStart({ touches: [{ identifier: 1, clientX: 10, clientY: 10 }] });
+    const rightMove = { cancelable: true, touches: [{ identifier: 1, clientX: 20, clientY: 10 }], preventDefault() { this.defaultPrevented = true; } };
+    controller.handlePickerTouchMove(rightMove);
+    controller.handlePickerTouchEnd({ type: 'touchend', changedTouches: [{ identifier: 1, clientX: 70 }] });
+    controller.handlePickerTouchStart({ touches: [{ identifier: 2, clientX: 70, clientY: 10 }] });
+    const leftMove = { cancelable: true, touches: [{ identifier: 2, clientX: 60, clientY: 10 }], preventDefault() { this.defaultPrevented = true; } };
+    controller.handlePickerTouchMove(leftMove);
+    controller.handlePickerTouchEnd({ type: 'touchend', changedTouches: [{ identifier: 2, clientX: 10 }] });
+
+    assert.equal(rightMove.defaultPrevented, true);
+    assert.equal(leftMove.defaultPrevented, true);
+    assert.deepEqual(wrappedIndices, [2, 0]);
+    assert.equal(controller.focusedRecordIndex, 0);
+});
+
+test('record picker leaves an interior horizontal swipe to native scrolling', () => {
+    const controller = Object.create(RecordPickerController.prototype);
+    controller.records = [{}, {}, {}];
+    controller.recordSelectionService = new RecordSelectionService();
+    controller.recordSelectionService.initialize(3, 1);
+    controller.handlePickerTouchStart({ touches: [{ identifier: 1, clientX: 10, clientY: 10 }] });
+    const move = { cancelable: true, touches: [{ identifier: 1, clientX: 20, clientY: 10 }], preventDefault() { this.defaultPrevented = true; } };
+
+    controller.handlePickerTouchMove(move);
+
+    assert.equal(move.defaultPrevented, undefined);
+});
+
+test('hero text reveal starts on player display then repeats every ten seconds while visible', () => {
+    const controller = Object.create(TextRevealController.prototype);
+    const splashTitle = {};
+    const hero = {};
+    const splashScreen = { hidden: false };
+    const playerPanel = { hidden: false };
+    const revealed = [];
+    let intervalCallback;
+    let intervalMs;
+    let intervalId = 0;
+    let visibilityListener;
+    const clearedIntervals = [];
+    controller.splashScreen = splashScreen;
+    controller.splashTitle = splashTitle;
+    controller.hero = hero;
+    controller.document = {
+        hidden: false,
+        addEventListener(type, listener) {
+            if (type === 'visibilitychange') visibilityListener = listener;
+        },
+    };
+    controller.window = {
+        setInterval(callback, delay) {
+            intervalCallback = callback;
+            intervalMs = delay;
+            intervalId += 1;
+            return intervalId;
+        },
+        clearInterval(id) { clearedIntervals.push(id); },
+    };
+    controller.heroRevealInterval = null;
+    controller.reveal = (element) => revealed.push(element);
+    hero.closest = () => playerPanel;
+
+    controller.initialize();
+    assert.deepEqual(revealed, [splashTitle]);
+    splashScreen.hidden = true;
+    controller.onPlayerScreenShown();
+    intervalCallback();
+    controller.document.hidden = true;
+    intervalCallback();
+    controller.document.hidden = false;
+    visibilityListener();
+    playerPanel.hidden = true;
+    intervalCallback();
+
+    assert.equal(intervalMs, 10_000);
+    assert.deepEqual(revealed, [splashTitle, hero, hero, hero]);
+    assert.deepEqual(clearedIntervals, [1]);
+});
+
 test('Web Audio engine loads and reverses audio through its injected fetch boundary', async () => {
     let receiver;
     let request;
@@ -481,6 +632,42 @@ test('Web Audio engine normalizes direction with the domain rule', () => {
     assert.equal(engine.direction, 'forward');
 });
 
+test('Web Audio engine detects denied autoplay and resumes when policy checks are unavailable', async () => {
+    let deniedPolicyResumeCount = 0;
+    const deniedEngine = new WebAudioEngine({
+        fetchImpl: async () => {},
+        navigatorRef: { getAutoplayPolicy: () => 'disallowed' },
+    });
+    deniedEngine.audioUnlocked = true;
+    deniedEngine.audioContext = {
+        state: 'suspended',
+        resume: async () => { deniedPolicyResumeCount++; },
+    };
+    assert.equal(await deniedEngine.isAutoplayAllowed(), false);
+    assert.equal(deniedPolicyResumeCount, 0);
+
+    const fallbackEngine = new WebAudioEngine({ fetchImpl: async () => {}, navigatorRef: {} });
+    fallbackEngine.audioUnlocked = true;
+    fallbackEngine.audioContext = {
+        state: 'suspended',
+        resume: async function resume() { this.state = 'running'; },
+    };
+    assert.equal(await fallbackEngine.isAutoplayAllowed(), true);
+
+    const deniedFallbackEngine = new WebAudioEngine({ fetchImpl: async () => {}, navigatorRef: {} });
+    deniedFallbackEngine.audioUnlocked = true;
+    deniedFallbackEngine.audioContext = {
+        state: 'suspended',
+        resume: async () => { throw new Error('NotAllowedError'); },
+    };
+    assert.equal(await deniedFallbackEngine.isAutoplayAllowed(), false);
+
+    const pendingFallbackEngine = new WebAudioEngine({ fetchImpl: async () => {}, navigatorRef: {} });
+    pendingFallbackEngine.audioUnlocked = true;
+    pendingFallbackEngine.audioContext = { state: 'suspended', resume: () => new Promise(() => {}) };
+    assert.equal(await pendingFallbackEngine.isAutoplayAllowed(), false);
+});
+
 test('playback cookie repository preserves fallback, normalization, and encoded writes', () => {
     const documentRef = createCookieDocument({
         'groove-record-index': 'record%20002',
@@ -523,6 +710,47 @@ test('browser interaction controller preserves page restoration reload behavior'
     fixture.documentRef.wasDiscarded = true;
     fixture.windowListeners.get('pageshow')({ persisted: false });
     assert.equal(fixture.reloadCount, 2);
+});
+
+test('browser interaction controller reloads the visible player if autoplay is unavailable after backgrounding', async () => {
+    let permissionChecks = 0;
+    const fixture = createBrowserInteractionFixture({
+        playbackService: { isAutoplayAllowed: async () => { permissionChecks++; return false; } },
+    });
+    const visibilityChange = fixture.documentListeners.get('visibilitychange').listener;
+
+    fixture.documentRef.hidden = true;
+    await visibilityChange();
+    fixture.documentRef.hidden = false;
+    await visibilityChange();
+
+    assert.equal(permissionChecks, 1);
+    assert.equal(fixture.reloadCount, 1);
+});
+
+test('browser interaction controller skips autoplay reload outside the player or when permission remains available', async () => {
+    let permissionChecks = 0;
+    const pickerFixture = createBrowserInteractionFixture({
+        playbackService: { isAutoplayAllowed: async () => { permissionChecks++; return false; } },
+        playerHidden: true,
+    });
+    const pickerVisibilityChange = pickerFixture.documentListeners.get('visibilitychange').listener;
+    pickerFixture.documentRef.hidden = true;
+    await pickerVisibilityChange();
+    pickerFixture.documentRef.hidden = false;
+    await pickerVisibilityChange();
+    assert.equal(permissionChecks, 0);
+    assert.equal(pickerFixture.reloadCount, 0);
+
+    const playerFixture = createBrowserInteractionFixture({
+        playbackService: { isAutoplayAllowed: async () => true },
+    });
+    const playerVisibilityChange = playerFixture.documentListeners.get('visibilitychange').listener;
+    playerFixture.documentRef.hidden = true;
+    await playerVisibilityChange();
+    playerFixture.documentRef.hidden = false;
+    await playerVisibilityChange();
+    assert.equal(playerFixture.reloadCount, 0);
 });
 
 test('browser interaction controller suppresses edge history swipes and top pull-to-refresh only', () => {
@@ -598,7 +826,9 @@ test('dependencies point inward and browser controllers do not import domain or 
     assertNoForbiddenImports(collectFiles('assets/js/application'), /from\s+['"][^'"]*\/(?:infrastructure|controller)\//, 'outer layers');
     assertNoForbiddenImports(collectFiles('assets/js/controller'), /from\s+['"][^'"]*\/(?:domain|infrastructure)\//, 'domain or infrastructure');
     const compositionRoot = readFileSync(join(projectRoot, 'assets/js/main.js'), 'utf8');
-    assert.match(compositionRoot, /new BrowserInteractionController\(\)/);
+    assert.match(compositionRoot, /new BrowserInteractionController\(\{/);
+    assert.match(compositionRoot, /playbackService,/);
+    assert.match(compositionRoot, /playerPanel: document\.querySelector\('#playerPanel'\)/);
     assert.doesNotMatch(compositionRoot, /document\.addEventListener\(|window\.addEventListener\(/);
     const splashController = readFileSync(join(projectRoot, 'assets/js/controller/splash-controller.js'), 'utf8');
     assert.match(splashController, /playbackService\.activateAudio\(\)/);

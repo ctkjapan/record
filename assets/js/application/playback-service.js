@@ -2,6 +2,7 @@ import { PlaybackPolicy } from '../domain/playback-policy.js';
 import { PlaybackDirection } from '../domain/playback-direction.js';
 import { PlaybackRate } from '../domain/playback-rate.js';
 import { PlaybackSession } from '../domain/playback-session.js';
+import { PlaybackTimeline } from '../domain/playback-timeline.js';
 
 /** 再生状態の復元・選択・速度変更を調停するアプリケーションサービス。 */
 export class PlaybackService {
@@ -40,6 +41,11 @@ export class PlaybackService {
         return this.audioEngine.unlock();
     }
 
+    /** バックグラウンド復帰後に自動再生を継続できるか確認する。 */
+    isAutoplayAllowed() {
+        return this.audioEngine.isAutoplayAllowed();
+    }
+
     /** 選択レコードの音源を読み込む。 */
     setAudioSource(sourceUrl, initialSeconds = 0) {
         return this.audioEngine.setSource(sourceUrl, initialSeconds);
@@ -71,6 +77,11 @@ export class PlaybackService {
 
     previewSeek(seconds) {
         this.audioEngine.previewSeek(seconds);
+    }
+
+    /** 再生位置を現在の音源の時間範囲へ補正する。 */
+    normalizePlaybackPosition(seconds) {
+        return PlaybackTimeline.normalizePosition(seconds, this.audioEngine.duration);
     }
 
     setDirection(direction) {

@@ -364,7 +364,7 @@ export class RecordPlayerController {
             return;
         }
         const { width, height, centerX, centerY, baseRadius } = layout;
-        if (!this.visualizerAccent) this.visualizerAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#aaaaaa';
+        if (!this.visualizerAccent) this.visualizerAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent-color').trim() || '#aaaaaa';
         const barAngle = (Math.PI * 2) / data.length;
         this.visualizerContext.clearRect(0, 0, width, height);
         this.visualizerContext.lineWidth = VISUALIZER_BAR_LINE_WIDTH;
@@ -521,7 +521,7 @@ export class RecordPlayerController {
         const { duration } = this.playbackService.audioState;
         if (duration <= 0) return;
         this.isSeeking = true;
-        this.pendingSeekSeconds = Math.max(0, Math.min(duration, Number(this.audioSeek.value)));
+        this.pendingSeekSeconds = this.playbackService.normalizePlaybackPosition(Number(this.audioSeek.value));
         this.playbackService.previewSeek(this.pendingSeekSeconds);
         this.updateAudioTime();
         this.persistPlaybackSeconds();

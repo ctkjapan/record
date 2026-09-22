@@ -1,4 +1,5 @@
 import { PlaybackSeconds } from '../domain/playback-seconds.js';
+import { PlaybackTimeline } from '../domain/playback-timeline.js';
 import {
     PlaybackDirection,
     PLAYBACK_DIRECTION_FORWARD,
@@ -14,10 +15,11 @@ const REVERSE_BUFFER_PROGRESS_START = 92;
 const VISUALIZER_MIN_DECIBELS = -90;
 const VISUALIZER_MAX_DECIBELS = -10;
 const VISUALIZER_SMOOTHING = 0.5;
+const AUTOPLAY_RESUME_TIMEOUT_MS = 1000;
 
 /** Web Audio APIを隠蔽し、音声の取得・デコード・再生状態を管理するインフラ実装。 */
 export class WebAudioEngine {
-    constructor({ noiseSourceUrl = null, noiseEnabled = false, fetchImpl = globalThis.fetch } = {}) {
+    constructor({ noiseSourceUrl = null, noiseEnabled = false, fetchImpl = globalThis.fetch, navigatorRef = globalThis.navigator } = {}) {
         // AudioContextと音声バッファのライフサイクルを管理する状態。
         this.audioContext = null;
         this.audioBuffer = null;
@@ -30,6 +32,7 @@ export class WebAudioEngine {
         this.audioBufferCache = new Map();
         // 音声取得はインフラ境界から注入し、ブラウザーの実行コンテキストを保つ。
         this.fetch = fetchImpl.bind(globalThis);
+        this.navigator = navigatorRef;
         // メイン音源と同期してループするノイズ音源の状態。
         this.noiseSourceUrl = noiseSourceUrl;
         this.noiseAudioBuffer = null;
@@ -408,6 +411,34 @@ export class WebAudioEngine {
         this.audioUnlocked = true;
     }
 
+    /** バックグラウンド復帰後もユーザー操作なしで音声を再開できるか確認する。 */
+    async isAutoplayAllowed() {
+        if (!this.audioUnlocked) return true;
+        const context = this.audioContext;
+        if (!context || context.state === 'closed') return false;
+
+        if (typeof this.navigator?.getAutoplayPolicy === 'function') {
+            try {
+                if (this.navigator.getAutoplayPolicy(context) === 'disallowed') return false;
+            } catch {
+                // ポリシーAPIが未対応状態ならAudioContextの復帰可否を使う。
+            }
+        }
+
+        if (context.state !== 'running') {
+            let timeoutId;
+            const resumed = await Promise.race([
+                Promise.resolve().then(() => context.resume()).then(() => true, () => false),
+                new Promise((resolve) => {
+                    timeoutId = setTimeout(() => resolve(false), AUTOPLAY_RESUME_TIMEOUT_MS);
+                }),
+            ]);
+            clearTimeout(timeoutId);
+            if (!resumed) return false;
+        }
+        return context.state === 'running';
+    }
+
     /** 現在の方向・位置・速度でAudioBufferSourceNodeを開始する。 */
     startSource() {
         if (!this.isPlaying || !this.audioBuffer || !this.reversedAudioBuffer || !this.audioContext || this.audioSource) return;
@@ -529,6 +560,6 @@ export class WebAudioEngine {
 
     /** 再生秒数を音声の総時間以内へ制限する。 */
     clampSeconds(seconds) {
-        return this.duration > 0 ? Math.min(this.normalizeSeconds(seconds), this.duration) : this.normalizeSeconds(seconds);
+        return PlaybackTimeline.normalizePosition(seconds, this.duration);
     }
 }
