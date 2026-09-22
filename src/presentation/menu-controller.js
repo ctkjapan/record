@@ -1,3 +1,5 @@
+import { findTouchByIdentifier } from './touch-utils.js';
+
 const MENU_SWIPE_THRESHOLD = 48;
 
 /** ヘッダーメニューの開閉とキーボード操作を担当するController。 */
@@ -81,7 +83,7 @@ export class MenuController {
 
     /** タッチ移動時に標準スクロールを抑制する。 */
     handleTouchMove(event) {
-        const touch = Array.from(event.touches).find(({ identifier }) => identifier === this.menuTouchIdentifier);
+        const touch = findTouchByIdentifier(event.touches, this.menuTouchIdentifier);
         if (!touch) return;
         const deltaX = touch.clientX - this.menuTouchStartX;
         const deltaY = touch.clientY - this.menuTouchStartY;
@@ -91,7 +93,7 @@ export class MenuController {
     /** 上方向のタッチスワイプでメニューを閉じる。 */
     releaseTouch(event) {
         if (this.menuTouchIdentifier === null) return;
-        const touch = Array.from(event.changedTouches).find(({ identifier }) => identifier === this.menuTouchIdentifier);
+        const touch = findTouchByIdentifier(event.changedTouches, this.menuTouchIdentifier);
         if (!touch) return;
         const deltaX = touch.clientX - this.menuTouchStartX;
         const deltaY = touch.clientY - this.menuTouchStartY;

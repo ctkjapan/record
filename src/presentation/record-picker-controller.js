@@ -1,3 +1,5 @@
+import { findTouchByIdentifier } from './touch-utils.js';
+
 // プレーヤー画面のスワイプを選択画面への移動とみなす距離（px）。
 const PLAYER_STAGE_SWIPE_THRESHOLD = 48;
 // 端から外向きへ循環移動する選択画面のスワイプ距離（px）。
@@ -155,7 +157,7 @@ export class RecordPickerController {
 
     /** タッチ移動中にプレーヤーステージのブラウザー操作を抑制する。 */
     handlePlayerStageTouchMove(event) {
-        const touch = Array.from(event.touches).find(({ identifier }) => identifier === this.playerStageTouchIdentifier);
+        const touch = findTouchByIdentifier(event.touches, this.playerStageTouchIdentifier);
         if (!touch) return;
         const deltaX = touch.clientX - this.playerStageTouchStartX;
         const deltaY = touch.clientY - this.playerStageTouchStartY;
@@ -165,7 +167,7 @@ export class RecordPickerController {
     /** タッチ終了時に左右なら選択画面、下方向ならメニューを開く。 */
     releasePlayerStageTouch(event) {
         if (this.playerStageTouchIdentifier === null) return;
-        const touch = Array.from(event.changedTouches).find(({ identifier }) => identifier === this.playerStageTouchIdentifier);
+        const touch = findTouchByIdentifier(event.changedTouches, this.playerStageTouchIdentifier);
         if (!touch) return;
         const deltaX = touch.clientX - this.playerStageTouchStartX;
         const deltaY = touch.clientY - this.playerStageTouchStartY;
@@ -233,14 +235,19 @@ export class RecordPickerController {
 
     /** 中央に表示するカードを更新し、位置と案内文を変更する。 */
     setFocusedRecord(index) {
+        const previousFocusedIndex = this.focusedRecordIndex;
         const { focusedIndex, selectedIndex } = this.recordSelectionService.focus(index);
-        this.pickerCards.forEach((card, cardIndex) => card.classList.toggle('is-focused', cardIndex === focusedIndex));
+        if (previousFocusedIndex !== focusedIndex) {
+            this.pickerCards[previousFocusedIndex]?.classList.remove('is-focused');
+            this.pickerCards[focusedIndex]?.classList.add('is-focused');
+        }
         this.pickerPosition.textContent = String(focusedIndex + 1).padStart(2, '0');
         this.pickerStatus.textContent = focusedIndex === selectedIndex ? '中央のレコードをクリックして選択' : `${this.records[focusedIndex].title} をクリックして変更`;
     }
 
     /** レコード選択ユースケースを実行し、選択画面の表示を同期する。 */
     selectRecord(index) {
+        const previousSelectedIndex = this.selectedRecordIndex;
         const { selectedIndex } = this.recordSelectionService.select(index);
         const record = this.catalog.at(selectedIndex);
         const { isRecordChanged } = this.playbackService.selectRecord(record);
@@ -250,12 +257,16 @@ export class RecordPickerController {
         this.albumNumber.textContent = String(selectedIndex + 1).padStart(2, '0');
         this.albumArtist.textContent = record.artist;
         this.albumTitle.textContent = record.trackTitle;
-        this.pickerCards.forEach((card, cardIndex) => card.classList.toggle('is-selected', cardIndex === this.selectedRecordIndex));
+        if (previousSelectedIndex !== selectedIndex) {
+            this.pickerCards[previousSelectedIndex]?.classList.remove('is-selected');
+            this.pickerCards[selectedIndex]?.classList.add('is-selected');
+        }
         this.pickerStatus.textContent = `${record.title} を再生中`;
     }
 
     /** 選択画面を開き、現在のレコードを中央へスクロールする。 */
     openPicker() {
+        this.textRevealController?.onPlayerScreenHidden?.();
         this.playerController.setVisualizerVisible?.(false);
         this.pickerPanel.hidden = false;
         this.playerPanel.hidden = true;
@@ -354,7 +365,7 @@ export class RecordPickerController {
     /** 端から外向きの操作を通常の横スクロールより先に捕捉する。 */
     handlePickerTouchMove(event) {
         if (this.pickerTouchIdentifier === null) return;
-        const touch = Array.from(event.touches).find(({ identifier }) => identifier === this.pickerTouchIdentifier);
+        const touch = findTouchByIdentifier(event.touches, this.pickerTouchIdentifier);
         if (!touch) return;
         const deltaX = touch.clientX - this.pickerTouchStartX;
         const deltaY = touch.clientY - this.pickerTouchStartY;
@@ -368,7 +379,7 @@ export class RecordPickerController {
     /** 先頭端から右へスワイプした場合、末尾カードへフォーカスを循環する。 */
     handlePickerTouchEnd(event) {
         if (this.pickerTouchIdentifier === null) return;
-        const touch = Array.from(event.changedTouches).find(({ identifier }) => identifier === this.pickerTouchIdentifier);
+        const touch = findTouchByIdentifier(event.changedTouches, this.pickerTouchIdentifier);
         if (!touch) return;
         const swipeDistance = touch.clientX - this.pickerTouchStartX;
         const wrapDirection = swipeDistance >= PICKER_WRAP_SWIPE_THRESHOLD ? 'right' : swipeDistance <= -PICKER_WRAP_SWIPE_THRESHOLD ? 'left' : null;

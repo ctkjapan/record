@@ -374,14 +374,8 @@ export class WebAudioEngine {
         if (this.audioContext) return this.audioContext;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) throw new Error('Web Audio API is not supported.');
-        const probeContext = new AudioContextClass();
-        const hardwareSampleRate = probeContext.sampleRate || 48000;
-        probeContext.close();
-        try {
-            this.audioContext = new AudioContextClass({ sampleRate: hardwareSampleRate });
-        } catch {
-            this.audioContext = new AudioContextClass({ sampleRate: 48000 });
-        }
+        // 既定設定が選ぶデバイス対応サンプルレートを使い、プローブ用Contextの二重生成を避ける。
+        this.audioContext = new AudioContextClass();
         return this.audioContext;
     }
 

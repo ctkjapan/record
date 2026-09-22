@@ -20,21 +20,38 @@ export class TextRevealController {
         this.reveal(this.splashTitle);
         if (!this.splashScreen || this.splashScreen.hidden) this.onPlayerScreenShown();
         this.document.addEventListener('visibilitychange', () => {
-            if (!this.document.hidden) this.onPlayerScreenShown();
+            if (this.document.hidden) {
+                this.onPlayerScreenHidden();
+                return;
+            }
+            this.onPlayerScreenShown();
         });
     }
 
     /** プレーヤー画面の表示開始時にheroを再生し、10秒周期を開始し直す。 */
     onPlayerScreenShown() {
-        if (!this.isPlayerScreenVisible()) return;
+        if (!this.isPlayerScreenVisible()) {
+            this.onPlayerScreenHidden();
+            return;
+        }
         this.reveal(this.hero);
-        if (this.heroRevealInterval !== null) this.window.clearInterval(this.heroRevealInterval);
+        this.onPlayerScreenHidden();
         this.heroRevealInterval = this.window.setInterval(() => this.revealHero(), HERO_REVEAL_INTERVAL_MS);
+    }
+
+    /** プレーヤーが非表示になった時にheroの再表示タイマーを解放する。 */
+    onPlayerScreenHidden() {
+        if (this.heroRevealInterval === null) return;
+        this.window.clearInterval(this.heroRevealInterval);
+        this.heroRevealInterval = null;
     }
 
     /** プレーヤー画面が表示中のときだけheroを再アニメーションする。 */
     revealHero() {
-        if (!this.isPlayerScreenVisible()) return;
+        if (!this.isPlayerScreenVisible()) {
+            this.onPlayerScreenHidden();
+            return;
+        }
         this.reveal(this.hero);
     }
 

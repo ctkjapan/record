@@ -653,7 +653,7 @@ test('hero text reveal starts on player display then repeats every ten seconds w
 
     assert.equal(intervalMs, 10_000);
     assert.deepEqual(revealed, [splashTitle, hero, hero, hero]);
-    assert.deepEqual(clearedIntervals, [1]);
+    assert.deepEqual(clearedIntervals, [1, 2]);
 });
 
 test('Web Audio engine loads and reverses audio through its injected fetch boundary', async () => {
