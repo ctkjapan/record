@@ -1,3 +1,6 @@
+// 背景に配置する星粒子の個数。
+const STAR_PARTICLE_COUNT = 18;
+
 /** レコード情報、回転操作、再生状態、音声コントロールを描画する。 */
 export default function PlayerSection() {
     return (
@@ -16,6 +19,11 @@ export default function PlayerSection() {
 
             <div id='playerPanel' className='player' role='region' aria-label='レコードプレーヤー'>
                 <div id='playerStage' className='player-stage'>
+                    <div className='star-particles' aria-hidden='true'>
+                        {Array.from({ length: STAR_PARTICLE_COUNT }, (_, index) => (
+                            <span className={`star-particle star-particle--${index % 4}`} key={index} />
+                        ))}
+                    </div>
                     <canvas className='visualizer' id='visualizer' aria-hidden='true' />
                     <div className='record-shadow' aria-hidden='true' />
                     <div className='record' id='record' role='slider' tabIndex='0' aria-label='レコードを回す' aria-valuemin='0' aria-valuemax='360' aria-valuenow='0'>

@@ -367,6 +367,63 @@ body {
             background: repeating-linear-gradient(115deg, transparent 0 80px, rgb(var(--rgb-white) / 0.055) 81px 82px);
           }
 
+          .star-particles {
+            position: absolute;
+            z-index: 0;
+            inset: 0;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .6s ease;
+          }
+
+          .star-particle {
+            position: absolute;
+            top: var(--star-y);
+            left: var(--star-x);
+            width: var(--star-size);
+            aspect-ratio: 1;
+            color: var(--star-color);
+            opacity: 0;
+            background: currentColor;
+            filter: drop-shadow(0 0 7px currentColor);
+            animation: star-drift var(--star-duration) ease-in-out var(--star-delay) infinite alternate paused;
+
+            &.star-particle--0,
+            &.star-particle--2 {
+              clip-path: polygon(50% 0, 62% 35%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 35%);
+            }
+
+            &.star-particle--1 {
+              clip-path: polygon(50% 0, 61% 37%, 100% 50%, 61% 63%, 50% 100%, 39% 63%, 0 50%, 39% 37%);
+              border-radius: 50%;
+            }
+
+            &.star-particle--3 {
+              clip-path: polygon(50% 0, 59% 37%, 100% 50%, 59% 63%, 50% 100%, 41% 63%, 0 50%, 41% 37%);
+              transform: rotate(45deg);
+            }
+
+            &:nth-child(1) { --star-x: 7%; --star-y: 18%; --star-size: 18px; --star-duration: 9s; --star-delay: -5s; --star-color: #f8b84e; }
+            &:nth-child(2) { --star-x: 18%; --star-y: 67%; --star-size: 12px; --star-duration: 12s; --star-delay: -9s; --star-color: #ee7d72; }
+            &:nth-child(3) { --star-x: 29%; --star-y: 29%; --star-size: 22px; --star-duration: 11s; --star-delay: -3s; --star-color: #f4d36b; }
+            &:nth-child(4) { --star-x: 40%; --star-y: 78%; --star-size: 14px; --star-duration: 10s; --star-delay: -7s; --star-color: #e783a2; }
+            &:nth-child(5) { --star-x: 53%; --star-y: 15%; --star-size: 12px; --star-duration: 13s; --star-delay: -11s; --star-color: #f2b94b; }
+            &:nth-child(6) { --star-x: 65%; --star-y: 74%; --star-size: 20px; --star-duration: 9s; --star-delay: -2s; --star-color: #e97970; }
+            &:nth-child(7) { --star-x: 78%; --star-y: 24%; --star-size: 15px; --star-duration: 12s; --star-delay: -8s; --star-color: #f1d267; }
+            &:nth-child(8) { --star-x: 91%; --star-y: 58%; --star-size: 19px; --star-duration: 10s; --star-delay: -4s; --star-color: #ed8b9e; }
+            &:nth-child(9) { --star-x: 12%; --star-y: 43%; --star-size: 10px; --star-duration: 14s; --star-delay: -12s; --star-color: #e87568; }
+            &:nth-child(10) { --star-x: 24%; --star-y: 86%; --star-size: 16px; --star-duration: 11s; --star-delay: -6s; --star-color: #f3c458; }
+            &:nth-child(11) { --star-x: 36%; --star-y: 8%; --star-size: 13px; --star-duration: 9s; --star-delay: -1s; --star-color: #e782a0; }
+            &:nth-child(12) { --star-x: 48%; --star-y: 52%; --star-size: 17px; --star-duration: 13s; --star-delay: -10s; --star-color: #f4d56d; }
+            &:nth-child(13) { --star-x: 61%; --star-y: 34%; --star-size: 11px; --star-duration: 10s; --star-delay: -5s; --star-color: #ea766b; }
+            &:nth-child(14) { --star-x: 72%; --star-y: 91%; --star-size: 14px; --star-duration: 12s; --star-delay: -7s; --star-color: #f2bb4c; }
+            &:nth-child(15) { --star-x: 83%; --star-y: 43%; --star-size: 21px; --star-duration: 11s; --star-delay: -3s; --star-color: #e987a2; }
+            &:nth-child(16) { --star-x: 96%; --star-y: 13%; --star-size: 12px; --star-duration: 14s; --star-delay: -9s; --star-color: #f0d06a; }
+            &:nth-child(17) { --star-x: 4%; --star-y: 88%; --star-size: 15px; --star-duration: 10s; --star-delay: -6s; --star-color: #e8776d; }
+            &:nth-child(18) { --star-x: 57%; --star-y: 94%; --star-size: 10px; --star-duration: 13s; --star-delay: -2s; --star-color: #f3c250; }
+          }
+
           .record-shadow {
             position: absolute;
             width: min(80vw, 70dvh);
@@ -651,7 +708,6 @@ body {
 
         .picker-window {
           position: relative;
-          margin-top: 68px;
           overflow: hidden;
 
           &::before,
@@ -702,7 +758,7 @@ body {
             .picker-card {
               position: relative;
               flex: 0 0 25vw;
-              flex-basis: 240px;
+              flex-basis: 50svh;
               border: 0;
               padding: 0;
               scroll-snap-align: center;
@@ -842,6 +898,25 @@ body {
     }
   }
 
+  &.is-playing:not(.is-loading):not(.picker-open) {
+    main.app-shell {
+      #PagePlayer {
+        .player {
+          .player-stage {
+            .star-particles {
+              opacity: 1;
+            }
+
+            .star-particle {
+              animation-play-state: running;
+              will-change: transform, opacity;
+            }
+          }
+        }
+      }
+    }
+  }
+
   &.is-loading {
     --accent-color: #aaaaaa;
 
@@ -916,6 +991,13 @@ body {
     opacity: 1;
     transform: none;
   }
+
+  .star-particle {
+    animation: none !important;
+    opacity: .36;
+    transform: none;
+    will-change: auto;
+  }
 }
 
 @keyframes menu-zoom-out {
@@ -939,6 +1021,22 @@ body {
   100% {
     opacity: 0;
     transform: scale(2);
+  }
+}
+
+@keyframes star-drift {
+  0% {
+    opacity: .12;
+    transform: translate3d(0, 18px, 0) rotate(-12deg) scale(.72);
+  }
+
+  50% {
+    opacity: .65;
+  }
+
+  100% {
+    opacity: .24;
+    transform: translate3d(15px, -24px, 0) rotate(24deg) scale(1);
   }
 }
 

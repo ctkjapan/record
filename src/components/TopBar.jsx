@@ -7,9 +7,7 @@ export default function TopBar() {
             </button>
             <nav className='top-bar-actions' id='menuPanel' aria-label='メニュー' hidden>
                 <button className='button change-button close-menu' id='changeButton' type='button' aria-pressed='false'>
-                    Choose
-                    <br />
-                    your vinyl.
+                    Choose your vinyl.
                 </button>
                 <h2>playback speed</h2>
                 <div className='playback-speed-changer'>

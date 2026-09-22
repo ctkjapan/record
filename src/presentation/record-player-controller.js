@@ -326,6 +326,7 @@ export class RecordPlayerController {
     handleAudioError() {
         this.isAudioPlaying = false;
         this.pageBody.classList.remove('is-loading');
+        this.pageBody.classList.remove('is-playing');
         this.playState.textContent = 'AUDIO LOAD ERROR';
         this.lastPlayStateLabel = 'AUDIO LOAD ERROR';
         this.record.setAttribute('aria-busy', 'false');

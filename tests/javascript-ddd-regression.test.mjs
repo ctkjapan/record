@@ -19,6 +19,7 @@ import { Record } from '../src/domain/record.js';
 import { RecordCatalog } from '../src/domain/record-catalog.js';
 import { BrowserInteractionController } from '../src/presentation/browser-interaction-controller.js';
 import { RecordPickerController } from '../src/presentation/record-picker-controller.js';
+import { RecordPlayerController } from '../src/presentation/record-player-controller.js';
 import { TextRevealController } from '../src/presentation/text-reveal-controller.js';
 import { SplashController } from '../src/presentation/splash-controller.js';
 import { PlaybackStateRepository } from '../src/infrastructure/playback-state-repository.js';
@@ -287,6 +288,32 @@ test('track changes release decoded audio caches and detach buffers from stopped
     assert.equal(engine.audioLoadPromise, null);
     assert.equal(requestController.signal.aborted, true);
     assert.equal(engine.audioLoadRequestId, 1);
+});
+
+test('audio load errors clear the playing state and stop playback loops', () => {
+    const bodyClasses = new Set(['is-loading', 'is-playing']);
+    const controller = Object.create(RecordPlayerController.prototype);
+    let loopsCancelled = false;
+    controller.isAudioPlaying = true;
+    controller.pageBody = {
+        classList: {
+            remove(name) { bodyClasses.delete(name); },
+        },
+    };
+    controller.playState = { textContent: '' };
+    controller.lastPlayStateLabel = '';
+    controller.record = { setAttribute(name, value) { this[name] = value; } };
+    controller.lastAudioBusyState = null;
+    controller.cancelPlaybackLoops = () => { loopsCancelled = true; };
+
+    controller.handleAudioError(new Error('audio load failed'));
+
+    assert.equal(controller.isAudioPlaying, false);
+    assert.equal(bodyClasses.has('is-loading'), false);
+    assert.equal(bodyClasses.has('is-playing'), false);
+    assert.equal(controller.playState.textContent, 'AUDIO LOAD ERROR');
+    assert.equal(controller.record['aria-busy'], 'false');
+    assert.equal(loopsCancelled, true);
 });
 
 test('playback rate smoothing preserves the former 0.1 step and 0.01 settling threshold', () => {
@@ -1104,10 +1131,19 @@ test('dependencies point inward and browser controllers do not import domain or 
     assert.doesNotMatch(pickerController, /this\.catalog\.(?:all|at|indexOfId)\(/, 'Presentation must query the catalog through its application service');
     assert.doesNotMatch(pickerController, /this\.(?:recordCatalogService\.getRecordAt|playbackService\.selectRecord)\(/, 'selection orchestration belongs to the application service');
     assert.doesNotMatch(pickerController, /pickerTrack\.innerHTML/, 'catalog data must be rendered as text nodes');
-    const playerSection = readFileSync(join(projectRoot, 'src/components/sections/PlayerSection.jsx'), 'utf8');
+    assert.doesNotMatch(pickerController, /picker(?:Position|PositionMax|Status)/, 'removed picker footer controls must not remain in the controller');
     const pickerSection = readFileSync(join(projectRoot, 'src/components/sections/PickerSection.jsx'), 'utf8');
+    assert.doesNotMatch(pickerSection, /picker-footer|pickerPosition|pickerStatus/, 'removed picker footer markup must not return');
+    const stylesheet = readFileSync(join(projectRoot, 'src/stylesheet/main.css'), 'utf8');
+    assert.doesNotMatch(stylesheet, /\.picker-footer|\.picker-instruction/, 'removed picker footer styles must not remain');
+    const playerSection = readFileSync(join(projectRoot, 'src/components/sections/PlayerSection.jsx'), 'utf8');
     assert.match(playerSection, /id='hero' className='hero' aria-labelledby='pageTitle'/);
     assert.match(playerSection, /id='playerPanel' className='player' role='region' aria-label='レコードプレーヤー'/);
+    assert.match(playerSection, /STAR_PARTICLE_COUNT = 18/);
+    assert.match(playerSection, /className='star-particles' aria-hidden='true'/);
+    assert.match(stylesheet, /&\.is-playing:not\(\.is-loading\):not\(\.picker-open\)/);
+    assert.match(stylesheet, /animation-play-state: running/);
+    assert.match(stylesheet, /\.star-particle\s*\{[^}]*animation: none !important/);
     assert.match(pickerSection, /id='pickerPanel' className='picker-panel' role='region' aria-label='レコードを変更'/);
     const compositionRoot = readFileSync(join(projectRoot, 'src/composition-root.js'), 'utf8');
     assert.match(compositionRoot, /new BrowserInteractionController\(\{/);
